@@ -1,0 +1,20 @@
+{
+  "name": "japanese-tutor",
+  "version": "1.0.0",
+  "description": "Japanese language learning article generator powered by Claude AI",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "seed": "node database/seed.js",
+    "test-claude": "node test/test-claude.js",
+    "test-pipeline": "node test/test-pipeline.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@google-cloud/firestore": "^7.11.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "morgan": "^1.10.0"
+  }
+}

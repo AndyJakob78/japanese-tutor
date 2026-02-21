@@ -1,0 +1,77 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "vocabulary",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "times_seen", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "next_review_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "first_seen_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "last_seen_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "times_tested", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "word_romaji_macron", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "jlpt_level", "order": "ASCENDING" },
+        { "fieldPath": "first_seen_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "first_seen_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "quiz_questions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "article_id", "order": "ASCENDING" },
+        { "fieldPath": "id", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
