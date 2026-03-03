@@ -1,5 +1,10 @@
 import SwiftUI
 
+// TODO: Replace with your hosted URLs once you deploy the legal pages
+private let privacyPolicyURL = URL(string: "https://YOUR_DOMAIN/privacy")!
+private let termsOfUseURL    = URL(string: "https://YOUR_DOMAIN/terms")!
+private let supportURL       = URL(string: "https://YOUR_DOMAIN/support")!
+
 @Observable
 class ConfigViewModel {
     var config: AppConfig = .default
@@ -271,6 +276,43 @@ struct ConfigView: View {
                     }
                 } footer: {
                     Text("Each device has a unique ID. Your articles and vocabulary are private to this device.")
+                }
+
+                // Subscription
+                Section("Subscription") {
+                    NavigationLink {
+                        SubscriptionView()
+                    } label: {
+                        Label("Manage Subscription", systemImage: "star.circle")
+                    }
+                }
+
+                // Legal — required by Apple Guideline 3.1.2(c) and 5.1.1
+                Section("Legal") {
+                    Link(destination: privacyPolicyURL) {
+                        HStack {
+                            Text("Privacy Policy")
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Link(destination: termsOfUseURL) {
+                        HStack {
+                            Text("Terms of Use")
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Link(destination: supportURL) {
+                        HStack {
+                            Text("Support")
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 // Save button
