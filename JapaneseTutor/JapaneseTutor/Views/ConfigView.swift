@@ -1,9 +1,8 @@
 import SwiftUI
 
-// TODO: Replace with your hosted URLs once you deploy the legal pages
-private let privacyPolicyURL = URL(string: "https://YOUR_DOMAIN/privacy")!
-private let termsOfUseURL    = URL(string: "https://YOUR_DOMAIN/terms")!
-private let supportURL       = URL(string: "https://YOUR_DOMAIN/support")!
+private let privacyPolicyURL = URL(string: "https://andyjakob78.github.io/japanese-tutor/privacy-policy.html")!
+private let termsOfUseURL    = URL(string: "https://andyjakob78.github.io/japanese-tutor/terms-of-use.html")!
+private let supportURL       = URL(string: "https://andyjakob78.github.io/japanese-tutor/support.html")!
 
 @Observable
 class ConfigViewModel {

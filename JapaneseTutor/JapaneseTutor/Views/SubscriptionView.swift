@@ -1,12 +1,11 @@
 import SwiftUI
 import StoreKit
 
-// TODO: Replace with your actual product ID from App Store Connect
-private let subscriptionProductID = "com.japaneseTutor.premium.monthly"
+// NOTE: Verify this matches your product ID in App Store Connect (Monetization → Subscriptions)
+private let subscriptionProductID = "com.andreasjakob.JapaneseTutor.premium.monthly"
 
-// TODO: Replace with your hosted URLs once you deploy the legal pages
-private let privacyPolicyURL = URL(string: "https://YOUR_DOMAIN/privacy")!
-private let termsOfUseURL   = URL(string: "https://YOUR_DOMAIN/terms")!
+private let privacyPolicyURL = URL(string: "https://andyjakob78.github.io/japanese-tutor/privacy-policy.html")!
+private let termsOfUseURL   = URL(string: "https://andyjakob78.github.io/japanese-tutor/terms-of-use.html")!
 
 struct SubscriptionView: View {
     @State private var product: Product?
