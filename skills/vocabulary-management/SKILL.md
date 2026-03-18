@@ -50,3 +50,17 @@ Priority for review words:
 - Only introduce words at or below the user's configured level
 - Exception: proper nouns and katakana loanwords that are self-explanatory
   (e.g., "infura" for infrastructure, "samitto" for summit)
+
+## CRITICAL: Romaji Accuracy (word_romaji_macron)
+The `word_romaji_macron` field is validated deterministically after generation using
+`wanakana.toRomaji(word_kana)`. **A mismatch causes the entire pipeline to fail and
+the article to be rejected.**
+
+Rules:
+- `word_romaji_macron` MUST be the correct Hepburn romanisation of `word_kana`
+- Use macrons for long vowels: ā (ああ/ーa), ī (いい), ū (うう/ーu), ē (ええ/ーe), ō (おう/おお/ーo)
+- For ん before b/p/m, write "m" (e.g., さんぽ → sampo, さんぼ → sanbo)
+- For っ (small tsu), double the following consonant (e.g., きって → kitte)
+- NEVER invent or guess a reading — derive it strictly from the kana
+- If you are uncertain of the reading, use the kana itself as the primary field and
+  derive romaji mechanically; do not guess

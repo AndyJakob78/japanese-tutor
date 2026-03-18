@@ -19,13 +19,12 @@ class ArticleFeedViewModel {
         isLoading = false
     }
 
-    func generateArticle(proficiencyLevel: String? = nil, topic: String? = nil, newWordsCount: Int? = nil, targetWordCount: Int? = nil, writingSystem: String? = nil) async {
+    func generateArticle(proficiencyLevel: String? = nil, newWordsCount: Int? = nil, targetWordCount: Int? = nil, writingSystem: String? = nil) async {
         isGenerating = true
         errorMessage = nil
         do {
             let newArticle = try await APIClient.shared.generateArticle(
                 proficiencyLevel: proficiencyLevel,
-                topic: topic,
                 newWordsCount: newWordsCount,
                 targetWordCount: targetWordCount,
                 writingSystem: writingSystem
@@ -150,7 +149,6 @@ struct GenerateArticleSheet: View {
     @Bindable var viewModel: ArticleFeedViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedLevel = "N3"
-    @State private var topicOverride = ""
     @State private var newWordsCount = 12
     @State private var targetWordCount = 200
     @State private var selectedWritingSystem = "romaji"
@@ -187,17 +185,11 @@ struct GenerateArticleSheet: View {
                     Stepper("\(newWordsCount) new words", value: $newWordsCount, in: 5...25)
                 }
 
-                Section("Topic (Optional)") {
-                    TextField("e.g., Germany economy, Japan technology", text: $topicOverride)
-                }
-
                 Section {
                     Button {
                         Task {
-                            let topic = topicOverride.isEmpty ? nil : topicOverride
                             await viewModel.generateArticle(
                                 proficiencyLevel: selectedLevel,
-                                topic: topic,
                                 newWordsCount: newWordsCount,
                                 targetWordCount: targetWordCount,
                                 writingSystem: selectedWritingSystem

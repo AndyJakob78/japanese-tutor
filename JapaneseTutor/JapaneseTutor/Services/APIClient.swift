@@ -47,10 +47,9 @@ class APIClient {
         return try await get("/articles/\(id)")
     }
 
-    func generateArticle(proficiencyLevel: String? = nil, topic: String? = nil, newWordsCount: Int? = nil, targetWordCount: Int? = nil, writingSystem: String? = nil) async throws -> Article {
+    func generateArticle(proficiencyLevel: String? = nil, newWordsCount: Int? = nil, targetWordCount: Int? = nil, writingSystem: String? = nil) async throws -> Article {
         var body: [String: Any] = [:]
         if let level = proficiencyLevel { body["proficiency_level"] = level }
-        if let topic = topic { body["topic"] = topic }
         if let count = newWordsCount { body["new_words_per_article"] = count }
         if let wordCount = targetWordCount { body["target_word_count"] = wordCount }
         if let ws = writingSystem { body["writing_system"] = ws }

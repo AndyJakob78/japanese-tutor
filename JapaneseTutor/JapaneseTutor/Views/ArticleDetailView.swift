@@ -172,6 +172,15 @@ struct ArticleDetailView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                if let ws = article.writingSystem, ws != "romaji" {
+                    Text(ws == "kanji" ? "漢字" : "かな")
+                        .font(.caption)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundStyle(.blue)
+                        .clipShape(Capsule())
+                }
                 Spacer()
                 if let count = article.newWordCount, count > 0 {
                     Text("\(count) new words")

@@ -34,6 +34,17 @@ struct ArticleCard: View {
                         .foregroundStyle(Color.accentColor)
                 }
 
+                // Writing system badge
+                if let ws = article.writingSystem, ws != "romaji" {
+                    Text(ws == "kanji" ? "漢字" : "かな")
+                        .font(.caption2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundStyle(.blue)
+                        .clipShape(Capsule())
+                }
+
                 // Date
                 if let created = article.createdAt {
                     Text("· \(formatDate(created))")

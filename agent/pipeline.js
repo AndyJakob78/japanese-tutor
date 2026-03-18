@@ -8,6 +8,7 @@
 
 const { callClaudeJSON, callClaudeSearchJSON } = require('../server/services/claude');
 const { firestore, collections, getNextId } = require('../server/services/firestore');
+const wanakana = require('wanakana');
 
 /**
  * Load user configuration from Firestore (per-user).
@@ -196,6 +197,15 @@ function getWritingSystemPrompt(writingSystem, config) {
       skillHeader: 'Kana Rules',
       systemIntro: 'You write Japanese learning articles in hiragana and katakana (no kanji, no romaji) and extract vocabulary.',
       userRules: `Hiragana + katakana only, NO romaji, NO kanji. Add spaces between words. Max ${config.max_sentence_length} words per sentence. Exactly ${config.new_words_per_article} [NEW] words. Level: ${config.proficiency_level}. Include 1-2 grammar points. Also extract full vocabulary metadata for each [NEW] and [REVIEW] word.`,
+      writingSystemConstraint: `## CRITICAL: Writing System — Hiragana/Katakana
+ALL user-facing text in the JSON output (title_romaji, summary_romaji, body_romaji) MUST be written in hiragana and katakana ONLY.
+- NO romaji in article text
+- NO kanji in article text
+- The field names contain "_romaji" for historical reasons only — the content MUST be in hiragana/katakana
+- This applies to title_romaji, summary_romaji, and body_romaji equally`,
+      bodyFieldDesc: 'article body in hiragana/katakana with [NEW] and [REVIEW] markers',
+      titleFieldDesc: 'title in hiragana/katakana',
+      summaryFieldDesc: '1 short sentence in hiragana/katakana, max 80 chars, NO markers',
     };
   } else if (writingSystem === 'kanji') {
     const kanjiSkill = readSkill('kanji-standards/SKILL.md');
@@ -204,6 +214,15 @@ function getWritingSystemPrompt(writingSystem, config) {
       skillHeader: 'Kanji + Furigana Rules',
       systemIntro: 'You write Japanese learning articles using kanji with furigana and extract vocabulary. Every kanji gets furigana in full-width parentheses: 経済（けいざい）.',
       userRules: `Kanji + furigana in full-width parentheses. Use kanji at or below ${config.proficiency_level} level. Add spaces between phrases. Max ${config.max_sentence_length} words per sentence. Exactly ${config.new_words_per_article} [NEW] words. Level: ${config.proficiency_level}. Include 1-2 grammar points. Also extract full vocabulary metadata for each [NEW] and [REVIEW] word.`,
+      writingSystemConstraint: `## CRITICAL: Writing System — Kanji + Furigana
+ALL user-facing text in the JSON output (title_romaji, summary_romaji, body_romaji) MUST use kanji with furigana in full-width parentheses: 漢字（かんじ）.
+- NO romaji in article text
+- The field names contain "_romaji" for historical reasons only — the content MUST be kanji + furigana
+- Use hiragana/katakana for words without an appropriate kanji at ${config.proficiency_level} level
+- This applies to title_romaji, summary_romaji, and body_romaji equally`,
+      bodyFieldDesc: 'article body in kanji+furigana 漢字（かんじ） with [NEW] and [REVIEW] markers',
+      titleFieldDesc: 'title in kanji+furigana',
+      summaryFieldDesc: '1 short sentence in kanji+furigana, max 80 chars, NO markers',
     };
   } else {
     // Default: romaji
@@ -213,6 +232,13 @@ function getWritingSystemPrompt(writingSystem, config) {
       skillHeader: 'Romaji Rules',
       systemIntro: 'You write Japanese learning articles in Hepburn romaji and extract vocabulary.',
       userRules: `Hepburn romaji only, NO hiragana/katakana/kanji in article. Max ${config.max_sentence_length} words per sentence. Exactly ${config.new_words_per_article} [NEW] words. Level: ${config.proficiency_level}. Include 1-2 grammar points. Also extract full vocabulary metadata for each [NEW] and [REVIEW] word.`,
+      writingSystemConstraint: `## CRITICAL: Writing System — Romaji
+ALL user-facing text in the JSON output (title_romaji, summary_romaji, body_romaji) MUST be in Hepburn romaji.
+- NO hiragana, NO katakana, NO kanji in any text field
+- Use macrons for long vowels: ā, ī, ū, ē, ō`,
+      bodyFieldDesc: 'article body in romaji with [NEW] and [REVIEW] markers',
+      titleFieldDesc: 'title in romaji',
+      summaryFieldDesc: '1 short sentence in romaji, max 80 chars / 12 words, NO markers',
     };
   }
 }
@@ -249,6 +275,12 @@ ${articleSkill}
 ## ${wsPrompt.skillHeader}
 ${wsPrompt.skillText}
 
+${wsPrompt.writingSystemConstraint}
+
+## CRITICAL: Word Count
+The article body (body_romaji) MUST be approximately ${config.target_word_count || 200} words.
+Count words as space-separated tokens. Stay within ±25% of this target (${Math.round((config.target_word_count || 200) * 0.75)}–${Math.round((config.target_word_count || 200) * 1.25)} words).
+
 ## CRITICAL: JLPT ${config.proficiency_level} Level Enforcement
 This article MUST be written at ${config.proficiency_level} level. This means:
 - ALL vocabulary must be at ${config.proficiency_level} or below (N5 is easiest, N1 is hardest)
@@ -283,9 +315,9 @@ IMPORTANT: The vocabulary metadata (newWords, reviewWords) must ALWAYS include w
 
 Respond with ONLY JSON:
 {
-  "title_romaji": "title",
-  "summary_romaji": "1 short sentence, max 80 chars / 12 words, NO markers",
-  "body_romaji": "article with [NEW] and [REVIEW] markers",
+  "title_romaji": "${wsPrompt.titleFieldDesc}",
+  "summary_romaji": "${wsPrompt.summaryFieldDesc}",
+  "body_romaji": "${wsPrompt.bodyFieldDesc}",
   "translation_en": "English translation",
   "grammar_points": [{"pattern":"...","level":"N3","explanation":"...","examples":["..."]}],
   "sources_cited": ["source 1"],
@@ -383,6 +415,67 @@ Level: ${config.proficiency_level}. Test only real Japanese vocabulary meanings 
 }
 
 // =============================================
+// QUALITY VALIDATION
+// =============================================
+
+/**
+ * Normalise a romaji string to a flat phonetic form for comparison.
+ * Handles macrons, wanakana double-vowel output, ou→o long-o, and the
+ * Hepburn m→n rule before b/p/m (e.g. sampo vs. sanpo).
+ */
+function normalizeRomajiForComparison(str) {
+  if (!str) return '';
+  return str.toLowerCase()
+    // Strip macrons → base vowel
+    .replace(/ā/g, 'a').replace(/ī/g, 'i').replace(/ū/g, 'u').replace(/ē/g, 'e').replace(/ō/g, 'o')
+    // Collapse double vowels (wanakana output uses aa/ii/uu/ee/oo)
+    .replace(/aa/g, 'a').replace(/ii/g, 'i').replace(/uu/g, 'u').replace(/ee/g, 'e').replace(/oo/g, 'o')
+    // ou → o  (wanakana writes おう as "ou"; Hepburn writes it as "ō" → normalises to "o")
+    .replace(/ou/g, 'o')
+    // Hepburn writes ん before b/p/m as "m"; wanakana uses "n" — normalise to "n"
+    .replace(/m(?=[bpm])/g, 'n')
+    // Remove apostrophes and hyphens (wanakana uses - for katakana long vowel mark ー)
+    .replace(/['\-]/g, '');
+}
+
+/**
+ * Validate article quality after generation:
+ *  1. Word count within ±25% of target.
+ *  2. Every vocabulary word's word_romaji_macron matches its word_kana via wanakana.
+ *     Throws on a romaji hallucination so the pipeline rejects the result.
+ */
+function validateArticleQuality(articleData, config) {
+  const targetWordCount = config.target_word_count || 200;
+  const body = articleData.body_romaji || '';
+  const cleanBody = body.replace(/\[NEW\]|\[REVIEW\]/g, '').trim();
+  const wordCount = cleanBody.split(/\s+/).filter(w => w.length > 0).length;
+
+  const deviation = Math.abs(wordCount - targetWordCount) / targetWordCount;
+  if (deviation > 0.25) {
+    console.error(
+      `[Quality] Word count out of range: got ${wordCount}, target ${targetWordCount} ` +
+      `(${(deviation * 100).toFixed(0)}% deviation)`
+    );
+  }
+
+  // Romaji hallucination check
+  for (const word of (articleData.newWords || [])) {
+    if (!word.word_kana || !word.word_romaji_macron) continue;
+
+    const wanaRomaji = wanakana.toRomaji(word.word_kana);
+    const normWana = normalizeRomajiForComparison(wanaRomaji);
+    const normLLM  = normalizeRomajiForComparison(word.word_romaji_macron);
+
+    if (normWana !== normLLM) {
+      throw new Error(
+        `Romaji hallucination: kana="${word.word_kana}" → expected≈"${wanaRomaji}" (normalised "${normWana}"), ` +
+        `but LLM returned "${word.word_romaji_macron}" (normalised "${normLLM}")`
+      );
+    }
+  }
+}
+
+// =============================================
 // MAIN PIPELINE
 // =============================================
 async function runPipeline(overrides = {}, userId) {
@@ -409,6 +502,9 @@ async function runPipeline(overrides = {}, userId) {
 
     // Call 2: Article + Vocabulary (combined)
     const articleData = await generateArticleWithVocab(newsData, config, userId);
+
+    // Validate quality (word count + romaji accuracy) — throws on hallucination
+    validateArticleQuality(articleData, config);
 
     // Call 3: Quiz (runs while we start saving)
     const quizPromise = generateQuiz(articleData, config);

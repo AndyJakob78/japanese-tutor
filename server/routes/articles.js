@@ -14,7 +14,6 @@ const { runPipeline, getArticleWithDetails } = require('../../agent/pipeline');
 router.post('/generate', async (req, res, next) => {
   try {
     const overrides = {};
-    if (req.body.topic) overrides.topic = req.body.topic;
     if (req.body.region) overrides.region = req.body.region;
     if (req.body.proficiency_level) overrides.proficiency_level = req.body.proficiency_level;
     if (req.body.new_words_per_article) overrides.new_words_per_article = req.body.new_words_per_article;
