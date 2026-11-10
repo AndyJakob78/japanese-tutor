@@ -4,76 +4,92 @@ struct ArticleCard: View {
     let article: Article
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Title
+        VStack(alignment: .leading, spacing: 8) {
+            // Title (romaji) — truncate to 2 lines
             Text(stripMarkers(article.titleRomaji))
                 .font(.headline)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(2)
 
-            // Summary (short intro)
+            // Summary / English description — single line, truncated
             if let summary = article.summaryRomaji {
                 Text(stripMarkers(summary))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
 
-            // Metadata row — clean single line
-            HStack(spacing: 6) {
-                // Region flag
+            // Metadata row: region + topic + date
+            HStack(spacing: 4) {
                 if let region = article.region {
                     Text(regionFlag(region))
-                        .font(.caption2)
+                        .font(.caption)
                 }
 
-                // Category (short, not the full topic description)
                 if let topic = article.topic {
                     Text(shortLabel(topic))
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(Color.accentColor)
                 }
 
-                // Date
                 if let created = article.createdAt {
-                    Text("· \(formatDate(created))")
-                        .font(.caption2)
+                    Text("·")
+                        .font(.caption)
+                        .foregroundStyle(.quaternary)
+                    Text(formatDate(created))
+                        .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
 
                 Spacer()
+            }
 
-                // New word count
+            // Stats row: new words + quiz status
+            HStack(spacing: 12) {
                 if let count = article.newWordCount, count > 0 {
-                    Label("\(count) new", systemImage: "textformat.abc")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
+                    HStack(spacing: 3) {
+                        Image(systemName: "character.book.closed")
+                            .font(.system(size: 10))
+                        Text("\(count) new words")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.orange)
                 }
 
-                // Quiz status
+                if let reviewCount = article.reviewWordCount, reviewCount > 0 {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.trianglehead.2.counterclockwise")
+                            .font(.system(size: 10))
+                        Text("\(reviewCount) review")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.blue)
+                }
+
+                Spacer()
+
                 if let score = article.quizScore {
-                    Label("\(Int(score * 100))%", systemImage: "checkmark.circle")
-                        .font(.caption2)
-                        .foregroundStyle(score >= 0.7 ? .green : .orange)
-                } else {
-                    Label("Quiz", systemImage: "questionmark.circle")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 3) {
+                        Image(systemName: score >= 0.7 ? "checkmark.circle.fill" : "circle.dotted")
+                            .font(.system(size: 10))
+                        Text("\(Int(score * 100))%")
+                            .font(.caption.weight(.medium))
+                    }
+                    .foregroundStyle(score >= 0.7 ? .green : .orange)
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
     }
 
-    /// Shorten the topic to a readable label (max ~25 chars)
+    /// Shorten the topic to a readable label (max ~20 chars)
     private func shortLabel(_ topic: String) -> String {
         let words = topic.split(separator: " ")
-        if words.count <= 3 && topic.count <= 25 {
+        if words.count <= 3 && topic.count <= 20 {
             return topic.capitalized
         }
-        let short = words.prefix(3).joined(separator: " ")
-        if short.count > 25 {
-            return String(short.prefix(22)) + "…"
+        let short = words.prefix(2).joined(separator: " ")
+        if short.count > 20 {
+            return String(short.prefix(17)) + "..."
         }
         return short.capitalized
     }
@@ -87,6 +103,13 @@ struct ArticleCard: View {
         case "france": return "🇫🇷"
         case "china": return "🇨🇳"
         case "korea", "south korea": return "🇰🇷"
+        case "australia": return "🇦🇺"
+        case "canada": return "🇨🇦"
+        case "india": return "🇮🇳"
+        case "brazil": return "🇧🇷"
+        case "spain": return "🇪🇸"
+        case "italy": return "🇮🇹"
+        case "mexico": return "🇲🇽"
         default: return "🌍"
         }
     }

@@ -65,14 +65,29 @@ app.use('/api/vocabulary', require('./routes/vocabulary'));
 app.use('/api/articles', require('./routes/quiz')); // quiz routes are under /api/articles/:id/quiz
 app.use('/api/config', require('./routes/config'));
 app.use('/api/stats', require('./routes/stats'));
+app.use('/api/device', require('./routes/devices')); // trial status + Pro upgrade
+app.use('/api/practice', require('./routes/practice')); // sentence building
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+  // Only skip sending if we've ALREADY started/finished the response.
+  // NOTE: do NOT gate on `req.destroyed` — the request stream is commonly
+  // destroyed after Express finishes reading the body, which would make us
+  // skip the error response on every thrown error and leave the connection
+  // open until the 600s timeout (Cloud Run 504). Gate on response state only.
+  if (res.headersSent || res.writableEnded) {
+    console.log(`[ERROR] ${err.message} (response already sent, skipping)`);
+    return;
+  }
   console.error('Error:', err.message);
   console.error(err.stack);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error'
-  });
+  try {
+    res.status(err.status || 500).json({
+      error: err.message || 'Internal server error'
+    });
+  } catch (writeErr) {
+    console.log(`[ERROR] Could not send error response — client disconnected`);
+  }
 });
 
 // Start server

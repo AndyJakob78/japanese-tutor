@@ -9,20 +9,60 @@ const express = require('express');
 const router = express.Router();
 const { collections } = require('../services/firestore');
 const { runPipeline, getArticleWithDetails } = require('../../agent/pipeline');
+const { checkTrialStatus, incrementGenerationCount, FREE_TRIAL_LIMIT } = require('../services/deviceService');
+const { spellOutNumbers, spellOutArticle } = require('../../agent/middleware/spell-numbers');
 
 // POST /api/articles/generate — trigger the full generation pipeline
+// Enforces hard paywall: 3 free articles per device, then Pro required.
 router.post('/generate', async (req, res, next) => {
   try {
-    const overrides = {};
-    if (req.body.topic) overrides.topic = req.body.topic;
-    if (req.body.region) overrides.region = req.body.region;
-    if (req.body.proficiency_level) overrides.proficiency_level = req.body.proficiency_level;
-    if (req.body.new_words_per_article) overrides.new_words_per_article = req.body.new_words_per_article;
-    if (req.body.target_word_count) overrides.target_word_count = req.body.target_word_count;
-    if (req.body.writing_system) overrides.writing_system = req.body.writing_system;
+    const deviceId = req.userId; // X-User-ID doubles as device ID
 
+    // ── Step A+B: Check trial authorization ──────────────────────────────────
+    const trial = await checkTrialStatus(deviceId);
+
+    if (!trial.allowed) {
+      return res.status(403).json({
+        error:            'TRIAL_EXHAUSTED',
+        message:          `You have used your ${FREE_TRIAL_LIMIT} free articles. Please upgrade to Pro to continue generating.`,
+        generation_count: trial.generationCount,
+        limit:            FREE_TRIAL_LIMIT,
+      });
+    }
+
+    // ── Track client disconnect (screen lock / app backgrounded) ───────────
+    let clientDisconnected = false;
+    req.on('close', () => { clientDisconnected = true; });
+
+    // ── Step C: Run the Claude pipeline ──────────────────────────────────────
+    const overrides = {};
+    if (req.body.region)              overrides.region              = req.body.region;
+    if (req.body.proficiency_level)   overrides.proficiency_level   = req.body.proficiency_level;
+    if (req.body.new_words_per_article) overrides.new_words_per_article = req.body.new_words_per_article;
+    if (req.body.target_word_count)   overrides.target_word_count   = req.body.target_word_count;
+    if (req.body.writing_system)      overrides.writing_system      = req.body.writing_system;
+    if (req.body.custom_topic)        overrides.custom_topic        = req.body.custom_topic;
+
+    console.log(`[GENERATE] user=${req.userId.substring(0, 8)}... overrides=${JSON.stringify(overrides)}`);
     const article = await runPipeline(overrides, req.userId);
-    res.status(201).json(article);
+
+    // Increment ONLY after success — failed Claude calls don't cost a trial slot
+    if (!trial.isPro) {
+      await incrementGenerationCount(deviceId);
+    }
+
+    // ── Send response, handling client disconnect gracefully ────────────────
+    if (clientDisconnected) {
+      console.log(`[GENERATE] Article ${article.id} saved OK but client disconnected (screen lock / app backgrounded). User will see it on next refresh.`);
+      return; // article is in DB — nothing more to do
+    }
+
+    try {
+      res.status(201).json(spellOutArticle(article));
+    } catch (writeErr) {
+      // Connection died between our check and the write — still fine
+      console.log(`[GENERATE] Article ${article.id} saved OK but response write failed (client gone). User will see it on next refresh.`);
+    }
   } catch (err) {
     next(err);
   }
@@ -47,10 +87,11 @@ router.get('/', async (req, res, next) => {
 
     const articles = articlesSnapshot.docs.map(doc => {
       const data = doc.data();
+      const romaji = !data.writing_system || data.writing_system === 'romaji';
       return {
         id: data.id,
-        title_romaji: data.title_romaji,
-        summary_romaji: data.summary_romaji,
+        title_romaji: romaji ? spellOutNumbers(data.title_romaji) : data.title_romaji,
+        summary_romaji: romaji ? spellOutNumbers(data.summary_romaji) : data.summary_romaji,
         topic: data.topic,
         region: data.region,
         word_count: data.word_count,
@@ -85,7 +126,7 @@ router.get('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Article not found' });
     }
 
-    res.json(article);
+    res.json(spellOutArticle(article));
   } catch (err) {
     next(err);
   }

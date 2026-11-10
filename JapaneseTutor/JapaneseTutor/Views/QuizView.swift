@@ -98,56 +98,58 @@ struct QuizView: View {
 
     @ViewBuilder
     private func questionView(_ question: QuizQuestion) -> some View {
-        VStack(spacing: 20) {
-            // Progress bar
-            ProgressView(value: viewModel.progress)
-                .tint(.accentColor)
-                .padding(.horizontal)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Progress bar
+                    ProgressView(value: viewModel.progress)
+                        .tint(.accentColor)
+                        .padding(.horizontal)
 
-            Text("Question \(viewModel.currentIndex + 1) of \(viewModel.questions.count)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                    Text("Question \(viewModel.currentIndex + 1) of \(viewModel.questions.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
-            // Question type badge
-            Text(question.type.capitalized)
-                .font(.caption2)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Color.accentColor.opacity(0.15))
-                .clipShape(Capsule())
+                    // Question type badge
+                    Text(question.type.capitalized)
+                        .font(.caption2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.accentColor.opacity(0.15))
+                        .clipShape(Capsule())
 
-            // Question text
-            Text(question.questionRomaji)
-                .font(.title3.weight(.medium))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+                    // Question text
+                    Text(question.questionRomaji)
+                        .font(.title3.weight(.medium))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
 
-            if let questionEn = question.questionEn {
-                Text(questionEn)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                    if let questionEn = question.questionEn {
+                        Text(questionEn)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+
+                    // Answer options
+                    if question.distractors.isEmpty {
+                        // Free-form answer (for correction/construction types)
+                        freeFormAnswer(question)
+                    } else {
+                        // Multiple choice
+                        multipleChoiceOptions(question)
+                    }
+
+                    // Feedback
+                    if viewModel.showFeedback {
+                        feedbackView(question)
+                    }
+                }
+                .padding(.vertical)
+                .padding(.bottom, 16)
             }
 
-            Spacer()
-
-            // Answer options
-            if question.distractors.isEmpty {
-                // Free-form answer (for correction/construction types)
-                freeFormAnswer(question)
-            } else {
-                // Multiple choice
-                multipleChoiceOptions(question)
-            }
-
-            // Feedback
-            if viewModel.showFeedback {
-                feedbackView(question)
-            }
-
-            Spacer()
-
-            // Next button
+            // Next button — pinned to bottom, outside scroll
             if viewModel.showFeedback {
                 Button {
                     viewModel.nextQuestion()
@@ -166,9 +168,9 @@ struct QuizView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .padding(.horizontal)
+                .padding(.bottom, 16)
             }
         }
-        .padding(.vertical)
     }
 
     @ViewBuilder
@@ -283,50 +285,59 @@ struct QuizView: View {
 
     @ViewBuilder
     private var quizResultView: some View {
-        VStack(spacing: 24) {
-            if viewModel.isSubmitting {
-                ProgressView("Submitting results...")
-            } else if let result = viewModel.quizResult {
-                Image(systemName: result.score.percentage >= 70 ? "star.fill" : "arrow.counterclockwise")
-                    .font(.system(size: 60))
-                    .foregroundStyle(result.score.percentage >= 70 ? .yellow : .orange)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 24) {
+                    if viewModel.isSubmitting {
+                        ProgressView("Submitting results...")
+                    } else if let result = viewModel.quizResult {
+                        Image(systemName: result.score.percentage >= 70 ? "star.fill" : "arrow.counterclockwise")
+                            .font(.system(size: 60))
+                            .foregroundStyle(result.score.percentage >= 70 ? .yellow : .orange)
 
-                Text("Quiz Complete!")
-                    .font(.title.weight(.bold))
+                        Text("Quiz Complete!")
+                            .font(.title.weight(.bold))
 
-                Text("\(result.score.correct) / \(result.score.total) correct")
-                    .font(.title2)
+                        Text("\(result.score.correct) / \(result.score.total) correct")
+                            .font(.title2)
 
-                Text("\(result.score.percentage)%")
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(result.score.percentage >= 70 ? .green : .orange)
+                        Text("\(result.score.percentage)%")
+                            .font(.largeTitle.weight(.bold))
+                            .foregroundStyle(result.score.percentage >= 70 ? .green : .orange)
 
-                // Show incorrect answers
-                let incorrectResults = result.results.filter { $0.correct == false }
-                if !incorrectResults.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Review these:")
-                            .font(.headline)
-                        ForEach(Array(incorrectResults.enumerated()), id: \.offset) { _, r in
-                            HStack {
-                                Image(systemName: "xmark.circle")
-                                    .foregroundStyle(.red)
-                                VStack(alignment: .leading) {
-                                    Text("Your answer: \(r.yourAnswer ?? "")")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Text("Correct: \(r.correctAnswer ?? "")")
-                                        .font(.caption.weight(.medium))
+                        // Show incorrect answers
+                        let incorrectResults = result.results.filter { $0.correct == false }
+                        if !incorrectResults.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Review these:")
+                                    .font(.headline)
+                                ForEach(Array(incorrectResults.enumerated()), id: \.offset) { _, r in
+                                    HStack {
+                                        Image(systemName: "xmark.circle")
+                                            .foregroundStyle(.red)
+                                        VStack(alignment: .leading) {
+                                            Text("Your answer: \(r.yourAnswer ?? "")")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Text("Correct: \(r.correctAnswer ?? "")")
+                                                .font(.caption.weight(.medium))
+                                        }
+                                    }
                                 }
                             }
+                            .padding()
+                            .background(Color(.systemGray6))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .padding(.horizontal)
                         }
                     }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.horizontal)
                 }
+                .padding()
+                .padding(.bottom, 16)
+            }
 
+            // Done button — pinned to bottom, outside scroll
+            if viewModel.quizResult != nil {
                 Button("Done") {
                     dismiss()
                 }
@@ -337,9 +348,9 @@ struct QuizView: View {
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal)
+                .padding(.bottom, 16)
             }
         }
-        .padding()
     }
 }
 

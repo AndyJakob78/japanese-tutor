@@ -5,6 +5,10 @@
 const express = require('express');
 const router = express.Router();
 const { firestore, collections } = require('../services/firestore');
+const { spellOutNumbers, spellOutQuestion } = require('../../agent/middleware/spell-numbers');
+
+// Romaji articles are shown with numbers written out (see spell-numbers.js)
+const isRomaji = article => !article.writing_system || article.writing_system === 'romaji';
 
 // GET /api/articles/:id/quiz — get quiz for article
 router.get('/:id/quiz', async (req, res, next) => {
@@ -45,11 +49,12 @@ router.get('/:id/quiz', async (req, res, next) => {
       };
     });
     questions.sort((a, b) => (a.id || 0) - (b.id || 0));
+    const romaji = isRomaji(article);
 
     res.json({
       article_id: article.id,
-      article_title: article.title_romaji,
-      questions,
+      article_title: romaji ? spellOutNumbers(article.title_romaji) : article.title_romaji,
+      questions: romaji ? questions.map(spellOutQuestion) : questions,
       total: questions.length,
       answered: questions.filter(q => q.answered_at !== null && q.answered_at !== undefined).length,
       correct: questions.filter(q => q.answered_correctly === 1 || q.answered_correctly === true).length,
@@ -80,6 +85,7 @@ router.post('/:id/quiz', async (req, res, next) => {
     }
 
     const articleDocRef = articleSnapshot.docs[0].ref;
+    const romaji = isRomaji(articleSnapshot.docs[0].data());
 
     const results = [];
     let correctCount = 0;
@@ -102,7 +108,10 @@ router.post('/:id/quiz', async (req, res, next) => {
       const qDocRef = qSnapshot.docs[0].ref;
       const question = qSnapshot.docs[0].data();
 
-      const isCorrect = answer.trim().toLowerCase() === question.correct_answer.trim().toLowerCase();
+      // The app shows (and sends back) the written-out form; accept the stored digits too
+      const shownAnswer = romaji ? spellOutNumbers(question.correct_answer) : question.correct_answer;
+      const given = answer.trim().toLowerCase();
+      const isCorrect = given === question.correct_answer.trim().toLowerCase() || given === shownAnswer.trim().toLowerCase();
       if (isCorrect) correctCount++;
 
       batch.update(qDocRef, {
@@ -136,8 +145,8 @@ router.post('/:id/quiz', async (req, res, next) => {
         question_id,
         correct: isCorrect,
         your_answer: answer,
-        correct_answer: question.correct_answer,
-        hint: isCorrect ? null : question.hint,
+        correct_answer: shownAnswer,
+        hint: isCorrect ? null : (romaji ? spellOutNumbers(question.hint) : question.hint),
       });
     }
 

@@ -23,6 +23,7 @@ const collections = {
   config: firestore.collection('config'),
   newsCache: firestore.collection('news_cache'),
   counters: firestore.collection('counters'), // For auto-incrementing IDs
+  devices: firestore.collection('devices'),   // Per-device trial + Pro status
 };
 
 // --- Auto-increment ID helper ---

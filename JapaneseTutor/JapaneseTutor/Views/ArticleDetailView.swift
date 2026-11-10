@@ -64,6 +64,57 @@ struct ArticleDetailView: View {
                     // Article body — fully selectable, native iOS text selection
                     articleBody(article)
 
+                    // Quiz button — prominent, right after reading
+                    NavigationLink(destination: QuizView(articleId: article.id)) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "brain.head.profile")
+                                .font(.title2)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Test Your Knowledge")
+                                    .font(.headline)
+                                Text("Take the vocabulary quiz for this article")
+                                    .font(.caption)
+                                    .opacity(0.85)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .opacity(0.7)
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.accentColor)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .padding(.top, 4)
+
+                    // Sentence building — write your own sentences with the article's words
+                    if (article.writingSystem ?? "romaji") == "romaji", (article.vocabulary?.count ?? 0) >= 2 {
+                        NavigationLink(destination: SentencePracticeView(article: article)) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "pencil.and.list.clipboard")
+                                    .font(.title2)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Build Sentences")
+                                        .font(.headline)
+                                    Text("Write your own sentences with these words")
+                                        .font(.caption)
+                                        .opacity(0.85)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .opacity(0.7)
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.accentColor.opacity(0.12))
+                            .foregroundStyle(Color.accentColor)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
+                    }
+
                     // Translation toggle
                     if let translation = article.translationEn {
                         translationSection(translation)
@@ -79,22 +130,6 @@ struct ArticleDetailView: View {
                         vocabularySection(vocab, writingSystem: article.writingSystem ?? "romaji")
                     }
 
-                    // Quiz button
-                    NavigationLink(destination: QuizView(articleId: article.id)) {
-                        Label("Take Quiz", systemImage: "questionmark.circle.fill")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.accentColor)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                    .padding(.top, 8)
-
-                    // Sources
-                    if let sources = article.sources, !sources.isEmpty {
-                        sourcesSection(sources)
-                    }
                 }
                 .padding()
             } else if let error = viewModel.errorMessage {
@@ -108,6 +143,11 @@ struct ArticleDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
+                    // Quiz button — always accessible
+                    NavigationLink(destination: QuizView(articleId: articleId)) {
+                        Image(systemName: "brain.head.profile")
+                    }
+
                     // Word lookup button
                     Button {
                         viewModel.showWordLookup = true
@@ -203,6 +243,7 @@ struct ArticleDetailView: View {
                 vocabulary: article.vocabulary ?? [],
                 writingSystem: article.writingSystem ?? "romaji",
                 fontSize: viewModel.fontSize,
+                articleId: article.id,
                 onWordTap: { word in
                     viewModel.selectedWord = word
                 }
@@ -301,21 +342,6 @@ struct ArticleDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private func sourcesSection(_ sources: [Source]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Sources")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
-                Text(source.name)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.top, 8)
-    }
 }
 
 // MARK: - Word Detail Sheet

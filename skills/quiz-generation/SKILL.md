@@ -17,7 +17,11 @@
 - User picks or types the word
 - Example:
   Merz shushō wa ___ ni tsuite hanashimashita.
-  A) keizai  B) oishii  C) hayai  D) samui
+  A) keizai  B) kyōiku  C) kankyō  D) bōei
+- Distractors must be tempting: same field, part of speech, language and length
+  as the answer. Never absurd options — they make the answer guessable.
+- Live rules are in `generateQuiz` in agent/pipeline.js; giveaways are checked
+  by agent/middleware/quiz-check.js. This file is only read by the old step 05.
 
 ### 3. Romaji Correction
 - Show a sentence with intentional romaji errors

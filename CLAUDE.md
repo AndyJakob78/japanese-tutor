@@ -1,13 +1,18 @@
 # Japanese Language Learning Article Generator
 
+## ⚡ Read these first (operational context)
+- **[KNOWLEDGE_HUB.md](KNOWLEDGE_HUB.md)** — architecture, production environment, pipeline post-processing chain, known Claude hallucinations log, common operational tasks, things to never do without asking. **Start here when picking up work or debugging.**
+- **[DEPLOY.md](DEPLOY.md)** — exact deploy command, smoke test, rollback procedure. **Read before deploying.**
+
 ## Project Overview
 iOS app + Node.js backend that generates Japanese language learning articles from real current news using Claude AI. No chat interface — users trigger article generation, read articles in Hepburn romaji, study vocabulary, and take quizzes.
 
 ## Tech Stack
-- **Backend**: Node.js (Express), plain JavaScript (CommonJS), SQLite (better-sqlite3)
+- **Backend**: Node.js 20 (Express), plain JavaScript (CommonJS), deployed on Cloud Run (`europe-west1`)
 - **iOS**: Swift / SwiftUI (iOS 17+, @Observable pattern)
-- **AI**: Claude API (claude-sonnet-4-20250514) with web_search tool
-- **Database**: SQLite — single file, no server needed
+- **AI**: Claude API with `web_search` tool (model: see [server/services/claude.js](server/services/claude.js))
+- **Database**: Google Firestore (project `japanese-tutor-487503`) — NOT SQLite (older docs may say SQLite, this is outdated)
+- **Payments / trial**: RevenueCat (per-device trial via `X-User-ID` header)
 
 ## Conventions
 - Plain JavaScript with `require()` — no TypeScript, no build step

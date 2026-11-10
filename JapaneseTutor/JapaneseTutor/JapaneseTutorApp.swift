@@ -6,12 +6,29 @@
 //
 
 import SwiftUI
+import RevenueCat
 
 @main
 struct JapaneseTutorApp: App {
+
+    @State private var showOnboarding: Bool =
+        !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+
+    init() {
+        RevenueCatService.shared.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if showOnboarding {
+                OnboardingFlowView {
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        showOnboarding = false
+                    }
+                }
+            } else {
+                ContentView()
+            }
         }
     }
 }

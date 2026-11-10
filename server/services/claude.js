@@ -15,7 +15,44 @@ const client = new Anthropic({
   apiKey: API_KEY,
 });
 
-const MODEL = 'claude-haiku-4-5';
+const MODEL = 'claude-sonnet-5-5';
+
+// Sonnet 5.5 notes (migrated from Haiku 4.5, 2026-10-18):
+// - temperature/top_p/top_k with non-default values return a 400 → never sent.
+// - Thinking is adaptive and ON by default; it counts toward max_tokens, so we
+//   keep a generous floor (MIN_MAX_TOKENS). Depth is controlled via effort.
+// - Safety classifiers can decline (stop_reason "refusal"); we opt into the
+//   server-side fallback ("default" routing) so a decline is retried on
+//   Anthropic's recommended model inside the same call.
+const DEFAULT_EFFORT = 'medium';
+const MIN_MAX_TOKENS = 16000;
+const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
+
+/**
+ * Shared request fields for every call.
+ */
+function baseParams(systemPrompt, options) {
+  return {
+    model: MODEL,
+    max_tokens: Math.max(options.max_tokens || 0, MIN_MAX_TOKENS),
+    output_config: { effort: options.effort || DEFAULT_EFFORT },
+    betas: [FALLBACK_BETA],
+    fallbacks: 'default',
+    // Use prompt caching: cache the large system prompt (skill files etc.)
+    // so subsequent calls within 5 min reuse cached tokens (faster + cheaper)
+    system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+  };
+}
+
+/**
+ * Throw a clear error when the whole fallback chain declined the request.
+ */
+function assertNotRefused(response) {
+  if (response.stop_reason === 'refusal') {
+    const cat = response.stop_details?.category || 'unknown';
+    throw new Error(`Claude declined the request (refusal, category: ${cat})`);
+  }
+}
 
 /**
  * Sleep for a given number of milliseconds.
@@ -50,18 +87,25 @@ async function withRetry(fn, maxRetries = 3) {
  * Call Claude API for text generation (no tools).
  * @param {string} systemPrompt - System prompt providing context/instructions
  * @param {string} userPrompt - The user message / request
- * @param {object} [options] - Optional overrides (max_tokens, temperature)
+ * @param {object} [options] - Optional overrides (max_tokens, effort)
  * @returns {string} The text response from Claude
  */
 async function callClaude(systemPrompt, userPrompt, options = {}) {
   return withRetry(async () => {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: options.max_tokens || 4096,
-      temperature: options.temperature ?? 0.7,
-      system: systemPrompt,
+    const response = await client.beta.messages.create({
+      ...baseParams(systemPrompt, options),
       messages: [{ role: 'user', content: userPrompt }],
     });
+    assertNotRefused(response);
+
+    // Log cache performance (helps track savings)
+    if (response.usage) {
+      const cached = response.usage.cache_read_input_tokens || 0;
+      const total = response.usage.input_tokens || 0;
+      if (cached > 0) {
+        console.log(`[Claude] Cache hit: ${cached}/${total} input tokens cached (${Math.round(cached/total*100)}%)`);
+      }
+    }
 
     // Extract text from response content blocks
     const textBlocks = response.content.filter(b => b.type === 'text');
@@ -75,7 +119,7 @@ async function callClaude(systemPrompt, userPrompt, options = {}) {
  *
  * @param {string} systemPrompt - System prompt providing context/instructions
  * @param {string} userPrompt - The user message / request
- * @param {object} [options] - Optional overrides (max_tokens, temperature)
+ * @param {object} [options] - Optional overrides (max_tokens, effort)
  * @returns {string} The final text response from Claude (after all searches complete)
  */
 async function callClaudeWithSearch(systemPrompt, userPrompt, options = {}) {
@@ -85,14 +129,11 @@ async function callClaudeWithSearch(systemPrompt, userPrompt, options = {}) {
   let maxIterations = 10;
   while (maxIterations-- > 0) {
     const response = await withRetry(async () => {
-      return await client.messages.create({
-        model: MODEL,
-        max_tokens: options.max_tokens || 8192,
-        temperature: options.temperature ?? 0.7,
-        system: systemPrompt,
+      return await client.beta.messages.create({
+        ...baseParams(systemPrompt, options),
         tools: [
           {
-            type: 'web_search_20250305',
+            type: 'web_search_20260209',
             name: 'web_search',
             max_uses: options.max_searches || 5,
           }
@@ -100,6 +141,7 @@ async function callClaudeWithSearch(systemPrompt, userPrompt, options = {}) {
         messages,
       });
     });
+    assertNotRefused(response);
 
     // If Claude is done (end_turn or max_tokens), extract final text
     if (response.stop_reason === 'end_turn' || response.stop_reason === 'max_tokens') {
@@ -107,10 +149,14 @@ async function callClaudeWithSearch(systemPrompt, userPrompt, options = {}) {
       return textBlocks.map(b => b.text).join('');
     }
 
-    // If pause_turn, Claude needs to continue — add its response and loop
+    // If pause_turn, the server-side search loop paused — send the paused
+    // assistant turn back unchanged and the server resumes automatically.
+    // (No extra "Continue." user message: the API detects the trailing
+    // server_tool_use block. Keeping the history append-only also keeps
+    // Sonnet 5.5's thinking blocks valid.)
     if (response.stop_reason === 'pause_turn') {
+      if (messages[messages.length - 1].role === 'assistant') messages.pop();
       messages.push({ role: 'assistant', content: response.content });
-      messages.push({ role: 'user', content: 'Continue.' });
       continue;
     }
 

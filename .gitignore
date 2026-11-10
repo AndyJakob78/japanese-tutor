@@ -11,3 +11,14 @@ DerivedData/
 build/
 *.ipa
 *.xcarchive
+
+# SQLite side files (local only)
+*.db-shm
+*.db-wal
+
+# Local tooling
+.claude/
+
+# Operational notes with the owner's device ID (= account access, no auth) — public repo
+KNOWLEDGE_HUB.md
+DEPLOY.md

@@ -1,12 +1,14 @@
 // Vocabulary routes
 // GET  /api/vocabulary — all words (filterable)
 // GET  /api/vocabulary/due — words due for spaced repetition review
+// GET  /api/vocabulary/review — words for the daily typed review
+// POST /api/vocabulary — add a word the learner tapped in an article
 // PATCH /api/vocabulary/:id — update word status
 // POST /api/vocabulary/:id/test — record a test result
 
 const express = require('express');
 const router = express.Router();
-const { collections } = require('../services/firestore');
+const { collections, getNextId } = require('../services/firestore');
 
 // GET /api/vocabulary — list all words (filterable by status, level, category)
 router.get('/', async (req, res, next) => {
@@ -56,7 +58,9 @@ router.get('/', async (req, res, next) => {
     const total = words.length;
 
     // Pagination in code
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    // Default to 200 so the iOS app shows the full vocabulary list without pagination.
+    // iOS can pass ?limit=N&offset=N explicitly for paginated requests (Phase 2).
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
     const offset = parseInt(req.query.offset) || 0;
     words = words.slice(offset, offset + limit);
 
@@ -86,6 +90,119 @@ router.get('/due', async (req, res, next) => {
       .slice(0, limitCount);
 
     res.json({ due: dueWords, count: dueWords.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/vocabulary/review?limit=10 — words for the daily typed review
+// (2026-11-10). /due only returns words with next_review_at set, which most
+// words never get, so this ranks by the same review need as the quiz's review
+// questions: due, missed last time, still learning — skipping words far above
+// the learner's level, words the JLPT list doesn't know, and words tested
+// in the last 12 hours.
+router.get('/review', async (req, res, next) => {
+  try {
+    const { _internals: { sortByReviewNeed, loadConfig } } = require('../../agent/pipeline');
+    const { lookupLevel } = require('../../agent/middleware/jlpt-levels');
+    const limit = Math.min(parseInt(req.query.limit) || 10, 30);
+    const [config, snapshot] = await Promise.all([
+      loadConfig(req.userId),
+      collections.vocabulary.where('user_id', '==', req.userId).get(),
+    ]);
+    const now = Date.now();
+    const HALF_DAY = 12 * 60 * 60 * 1000;
+    const testedRecently = w => w.last_tested_at && now - Date.parse(w.last_tested_at) < HALF_DAY;
+    const allWords = snapshot.docs.map(doc => doc.data());
+    const words = sortByReviewNeed(allWords, config.proficiency_level, now)
+      // lookupLevel: rare compounds (chōtatsu, hyōkagaku) are often mis-tagged N4; only words the JLPT list knows
+      .filter(w => w._tier <= 3 && lookupLevel(w) && !testedRecently(w))
+      .slice(0, limit)
+      .map(({ _tier, ...w }) => w);
+
+    // The prompt is the English meaning, so another word of the learner's with the
+    // same meaning is also a right answer ("plan" → keikaku, but yotei is "plan" too).
+    const senses = w => String(w.meaning_en || '').toLowerCase()
+      .replace(/\([^)]*\)/g, '')
+      .split(/[,;/]/)
+      .map(s => s.trim().replace(/^to /, ''))
+      .filter(Boolean);
+    const alsoAccept = {};
+    for (const w of words) {
+      const mine = new Set(senses(w));
+      const others = allWords
+        .filter(o => o.id !== w.id && o.word_romaji_macron !== w.word_romaji_macron && senses(o).some(s => mine.has(s)))
+        .map(o => o.word_romaji_macron);
+      if (others.length) alsoAccept[w.id] = [...new Set(others)];
+    }
+    res.json({ words, count: words.length, also_accept: alsoAccept });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/vocabulary — add a tapped word to the learner's vocabulary (2026-11-10)
+// Body: { word_romaji_macron, meaning_en, word_kanji?, word_kana?, part_of_speech?,
+//         article_id?, context_sentence? }. Returns the existing word if already saved.
+router.post('/', async (req, res, next) => {
+  try {
+    const { _internals: { findExistingVocab } } = require('../../agent/pipeline');
+    const { lookupLevel } = require('../../agent/middleware/jlpt-levels');
+    const b = req.body || {};
+    const romaji = String(b.word_romaji_macron || '').trim().toLowerCase();
+    const meaning = String(b.meaning_en || '').trim();
+    if (!romaji || !meaning) {
+      return res.status(400).json({ error: 'Must provide "word_romaji_macron" and "meaning_en"' });
+    }
+    const word = {
+      word_romaji_macron: romaji,
+      word_kanji: b.word_kanji || null,
+      word_kana: b.word_kana || null,
+      meaning_en: meaning,
+      part_of_speech: b.part_of_speech || null,
+    };
+
+    const existing = await findExistingVocab(word, req.userId);
+    if (existing) return res.json(existing.data());
+
+    const now = new Date().toISOString();
+    const articleId = parseInt(b.article_id) || null;
+    const vocabId = await getNextId('vocabulary');
+    const doc = {
+      id: vocabId,
+      user_id: req.userId,
+      word_romaji: romaji.replace(/[āīūēō]/g, c => ({ ā: 'a', ī: 'i', ū: 'u', ē: 'e', ō: 'o' })[c]),
+      ...word,
+      jlpt_level: lookupLevel(word),
+      category: 'general',
+      status: 'learning',
+      times_seen: 1,
+      times_tested: 0,
+      times_tested_correct: 0,
+      times_used_correctly: 0,
+      streak_correct: 0,
+      first_seen_in_article_id: articleId,
+      first_seen_at: now,
+      last_seen_at: now,
+      last_tested_at: null,
+      next_review_at: null,
+    };
+    await collections.vocabulary.doc(String(vocabId)).set(doc);
+
+    // Link to the article so the word is underlined there and keeps its sentence
+    if (articleId) {
+      const avId = await getNextId('articleVocabulary');
+      await collections.articleVocabulary.doc(String(avId)).set({
+        id: avId,
+        user_id: req.userId,
+        article_id: articleId,
+        vocabulary_id: vocabId,
+        is_new: 0,
+        is_review: 0,
+        context_sentence: b.context_sentence ? String(b.context_sentence).slice(0, 400) : null,
+      });
+    }
+    res.status(201).json(doc);
   } catch (err) {
     next(err);
   }

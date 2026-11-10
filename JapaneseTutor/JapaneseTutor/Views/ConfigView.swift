@@ -243,36 +243,6 @@ struct ConfigView: View {
                     )
                 }
 
-                // API settings
-                Section("Server") {
-                    TextField("API Base URL", text: Binding(
-                        get: { APIClient.shared.baseURL },
-                        set: { APIClient.shared.baseURL = $0 }
-                    ))
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                }
-
-                // Device ID (read-only, for debugging)
-                Section {
-                    HStack {
-                        Text("Device ID")
-                        Spacer()
-                        Text(APIClient.shared.userId.prefix(8) + "...")
-                            .foregroundStyle(.secondary)
-                            .font(.system(.body, design: .monospaced))
-                    }
-                    .contextMenu {
-                        Button {
-                            UIPasteboard.general.string = APIClient.shared.userId
-                        } label: {
-                            Label("Copy Full ID", systemImage: "doc.on.doc")
-                        }
-                    }
-                } footer: {
-                    Text("Each device has a unique ID. Your articles and vocabulary are private to this device.")
-                }
-
                 // Save button
                 Section {
                     Button {

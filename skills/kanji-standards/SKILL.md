@@ -9,11 +9,29 @@ Use full-width parentheses immediately after each kanji word:
 - NOT: 首相は新しい経済政策を発表しました。 (missing furigana)
 - NOT: 首相(しゅしょう) (wrong parentheses — use full-width （）)
 
-## Word Spacing
-Add spaces between major phrase boundaries for readability:
-- 首相（しゅしょう）は 新（あたら）しい 経済（けいざい）政策（せいさく）を 発表（はっぴょう）しました。
-- Space after particles: は、が、を、に、で、と、も
-- Space before and after conjunctions
+## Word Spacing (this drives the romaji conversion downstream)
+
+The text is converted to romaji by splitting on your spaces, so spaces must sit
+exactly at word boundaries — no more, no fewer.
+
+**A word is one unit with no spaces inside it:** kanji + its furigana + its
+okurigana / conjugation ending. Write the okurigana directly after the closing
+）, with no space:
+- 大（おお）きい ・ 新（あたら）しい ・ 小（ちい）さい ・ 多（おお）く
+- 使（つか）って ・ 減（へ）って ・ 建（た）てて ・ 来（き）ます ・ 思（おも）います
+- 取（と）り扱（あつか）い ・ 引（ひ）き受（う）ける ・ 一（ひと）つ目（め）
+
+**Put one space between words:** before and after each particle (は が を に へ で
+と や か も の から まで より など だけ), before です/でした, before a separate
+auxiliary such as います after a te-form, and before する/します after a noun.
+- 首相（しゅしょう） は 新（あたら）しい 経済（けいざい） 政策（せいさく） を 発表（はっぴょう） しました。
+- ロボット や 機械（きかい） を 使（つか）って います。
+- 情報（じょうほう） を 送（おく）る と、 答（こた）えます。 (conditional と is its own word)
+
+Wrong — space inside a word (becomes "ō kii", "tsuka tte", "e tte" in romaji):
+大（おお） きい ・ 使（つか） って ・ 減（へ） って
+Wrong — two words glued (becomes "robottoya", "okuruto"):
+ロボットや ・ 送（おく）ると
 
 ## Kanji Level by JLPT
 - **N5**: ~100 basic kanji (日、本、人、大、小、中、国、年、月、時 etc.)

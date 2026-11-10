@@ -99,8 +99,11 @@ private func findVocabMatch(_ word: String, in lookup: [String: VocabularyWord],
         if let match = lookup[lower] { return match }
         let noMacron = stripMacrons(lower)
         if let match = lookup[noMacron] { return match }
-        // Prefix match for conjugated forms
-        for (key, vocab) in lookup {
+        // Prefix match for conjugated forms. Short words (particles like
+        // "ga", "no", "ni") only match exactly — otherwise "ga" linked to
+        // "gamen" and every particle in the article was underlined.
+        guard noMacron.count >= 3 else { return nil }
+        for (key, vocab) in lookup where stripMacrons(key).count >= 3 {
             if lower.hasPrefix(key) && lower.count <= key.count + 4 { return vocab }
             if key.hasPrefix(lower) && key.count <= lower.count + 4 { return vocab }
             let keyNoMacron = stripMacrons(key)
@@ -110,8 +113,10 @@ private func findVocabMatch(_ word: String, in lookup: [String: VocabularyWord],
     }
 
     if writingSystem == "kana" {
-        // Prefix match for kana conjugated forms
-        for (key, vocab) in lookup {
+        // Prefix match for kana conjugated forms (single-kana particles
+        // like が・の only match exactly, same reason as romaji above)
+        guard cleaned.count >= 2 else { return nil }
+        for (key, vocab) in lookup where key.count >= 2 {
             if cleaned.hasPrefix(key) && cleaned.count <= key.count + 3 { return vocab }
             if key.hasPrefix(cleaned) && key.count <= cleaned.count + 3 { return vocab }
         }
@@ -126,6 +131,7 @@ private func findVocabMatch(_ word: String, in lookup: [String: VocabularyWord],
 /// - Native iOS text selection (drag to select, blue handles, Copy menu)
 /// - Bold + colored new vocabulary words (filtered: no particles/common words)
 /// - Tap any underlined vocabulary word to see inline translation right below that paragraph
+/// - Tap any other word to look it up (meaning in this sentence) and add it to your words
 /// - [NEW] and [REVIEW] markers stripped from display
 /// - Supports romaji, kana, and kanji writing systems
 struct TappableRomajiText: View {
@@ -133,18 +139,42 @@ struct TappableRomajiText: View {
     let vocabulary: [VocabularyWord]
     let writingSystem: String
     let fontSize: CGFloat
+    let articleId: Int?
     let onWordTap: (VocabularyWord) -> Void
+    /// Called after a looked-up word was added, so the article can reload its vocabulary
+    let onWordAdded: (() -> Void)?
 
-    init(text: String, vocabulary: [VocabularyWord], writingSystem: String = "romaji", fontSize: CGFloat = 17, onWordTap: @escaping (VocabularyWord) -> Void) {
+    init(text: String, vocabulary: [VocabularyWord], writingSystem: String = "romaji", fontSize: CGFloat = 17, articleId: Int? = nil, onWordTap: @escaping (VocabularyWord) -> Void, onWordAdded: (() -> Void)? = nil) {
         self.text = text
         self.vocabulary = vocabulary
         self.writingSystem = writingSystem
         self.fontSize = fontSize
+        self.articleId = articleId
         self.onWordTap = onWordTap
+        self.onWordAdded = onWordAdded
     }
 
     @State private var tappedWord: VocabularyWord?
     @State private var tappedParagraphIndex: Int = -1
+    /// Any other word that was tapped (looked up on the server)
+    @State private var lookup: LookupState?
+
+    struct LookupState: Equatable {
+        let tapped: String
+        let sentence: String
+        var result: WordLookup?
+        var failed = false
+        var adding = false
+        var added = false
+
+        static func == (a: LookupState, b: LookupState) -> Bool {
+            a.tapped == b.tapped && a.sentence == b.sentence && a.added == b.added && a.adding == b.adding
+                && a.failed == b.failed && (a.result == nil) == (b.result == nil)
+        }
+    }
+
+    /// Lookups already made this session ("sagatta|sentence" → result)
+    private static var lookupCache: [String: WordLookup] = [:]
 
     var body: some View {
         let paragraphs = text.components(separatedBy: "\n\n").filter {
@@ -161,6 +191,7 @@ struct TappableRomajiText: View {
                     fontSize: fontSize,
                     onVocabTap: { word in
                         withAnimation(.easeInOut(duration: 0.2)) {
+                            lookup = nil
                             if tappedWord?.id == word.id {
                                 tappedWord = nil
                                 tappedParagraphIndex = -1
@@ -169,15 +200,129 @@ struct TappableRomajiText: View {
                                 tappedParagraphIndex = idx
                             }
                         }
+                    },
+                    onLookupTap: { word, sentence in
+                        startLookup(word: word, sentence: sentence, paragraph: idx)
                     }
                 )
 
                 // Tooltip appears right below the paragraph where the word was tapped
                 if tappedParagraphIndex == idx, let word = tappedWord {
                     wordTooltip(word)
+                } else if tappedParagraphIndex == idx, let lookup {
+                    lookupTooltip(lookup)
                 }
             }
         }
+    }
+
+    // MARK: Lookup of any word
+
+    private func startLookup(word: String, sentence: String, paragraph: Int) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            tappedWord = nil
+            if lookup?.tapped == word && tappedParagraphIndex == paragraph {
+                lookup = nil
+                tappedParagraphIndex = -1
+                return
+            }
+            tappedParagraphIndex = paragraph
+            lookup = LookupState(tapped: word, sentence: sentence, result: Self.lookupCache["\(word)|\(sentence)"])
+        }
+        guard lookup?.result == nil else { return }
+        Task {
+            let result = try? await APIClient.shared.lookupWord(word, sentence: sentence)
+            guard lookup?.tapped == word else { return }   // another word was tapped meanwhile
+            if let result { Self.lookupCache["\(word)|\(sentence)"] = result }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                lookup?.result = result
+                lookup?.failed = result == nil
+            }
+        }
+    }
+
+    private func addLookedUpWord() {
+        guard let state = lookup, let result = state.result else { return }
+        lookup?.adding = true
+        Task {
+            let saved = try? await APIClient.shared.addVocabulary(result, articleId: articleId, contextSentence: state.sentence)
+            guard lookup?.tapped == state.tapped else { return }
+            lookup?.adding = false
+            if saved != nil {
+                lookup?.added = true
+                onWordAdded?()
+            } else {
+                lookup?.failed = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func lookupTooltip(_ state: LookupState) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let r = state.result {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(r.wordRomajiMacron)
+                        .font(.callout.weight(.semibold))
+                    if writingSystem != "romaji" || r.wordKanji != nil {
+                        Text(writingSystem == "kana" ? (r.wordKana ?? "") : (r.wordKanji ?? r.wordKana ?? ""))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if let level = r.jlptLevel {
+                        Text(level)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text(r.meaningEn)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                if !r.note.isEmpty {
+                    Text(r.note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                // Names and particles aren't vocabulary to learn
+                if !["name", "particle"].contains(r.partOfSpeech ?? "") {
+                    if r.vocabularyId != nil || state.added {
+                        Label(state.added ? "Added to your words" : "Already in your words", systemImage: "checkmark.circle.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.green)
+                    } else {
+                        Button {
+                            addLookedUpWord()
+                        } label: {
+                            HStack(spacing: 4) {
+                                if state.adding { ProgressView().controlSize(.small) }
+                                Label("Add to my words", systemImage: "plus.circle.fill")
+                            }
+                            .font(.caption.weight(.semibold))
+                        }
+                        .disabled(state.adding)
+                    }
+                }
+            } else if state.failed {
+                Text("Couldn't look up \"\(state.tapped)\". Tap it again to retry.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Looking up \(state.tapped)…")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
     @ViewBuilder
@@ -235,6 +380,7 @@ private struct ParagraphTextView: View {
     let writingSystem: String
     let fontSize: CGFloat
     let onVocabTap: (VocabularyWord) -> Void
+    let onLookupTap: (String, String) -> Void
 
     @State private var textHeight: CGFloat = 20
 
@@ -245,7 +391,8 @@ private struct ParagraphTextView: View {
             writingSystem: writingSystem,
             fontSize: fontSize,
             calculatedHeight: $textHeight,
-            onVocabTap: onVocabTap
+            onVocabTap: onVocabTap,
+            onLookupTap: onLookupTap
         )
         .frame(height: textHeight)
     }
@@ -260,9 +407,10 @@ private struct SelectableTextView: UIViewRepresentable {
     let fontSize: CGFloat
     @Binding var calculatedHeight: CGFloat
     let onVocabTap: (VocabularyWord) -> Void
+    let onLookupTap: (String, String) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onVocabTap: onVocabTap)
+        Coordinator(onVocabTap: onVocabTap, onLookupTap: onLookupTap)
     }
 
     func makeUIView(context: Context) -> UITextView {
@@ -282,6 +430,7 @@ private struct SelectableTextView: UIViewRepresentable {
 
     func updateUIView(_ textView: UITextView, context: Context) {
         context.coordinator.onVocabTap = onVocabTap
+        context.coordinator.onLookupTap = onLookupTap
         context.coordinator.vocabulary = vocabulary
 
         let attrString = buildNSAttributedString()
@@ -396,6 +545,14 @@ private struct SelectableTextView: UIViewRepresentable {
                 }
                 attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
                 attrs[.underlineColor] = UIColor.systemGray3
+            } else if cleaned.rangeOfCharacter(from: .letters) != nil,
+                      var link = URLComponents(string: "lookup://word") {
+                // Any other word: tappable for a lookup, but it looks like plain text
+                link.queryItems = [URLQueryItem(name: "w", value: cleaned)]
+                if let url = link.url {
+                    attrs[.link] = url
+                    if !shouldHighlight { attrs[.foregroundColor] = UIColor.label }
+                }
             }
 
             result.append(NSAttributedString(string: remaining, attributes: attrs))
@@ -409,10 +566,24 @@ private struct SelectableTextView: UIViewRepresentable {
 
     class Coordinator: NSObject, UITextViewDelegate {
         var onVocabTap: (VocabularyWord) -> Void
+        var onLookupTap: (String, String) -> Void
         var vocabulary: [VocabularyWord] = []
 
-        init(onVocabTap: @escaping (VocabularyWord) -> Void) {
+        init(onVocabTap: @escaping (VocabularyWord) -> Void, onLookupTap: @escaping (String, String) -> Void) {
             self.onVocabTap = onVocabTap
+            self.onLookupTap = onLookupTap
+        }
+
+        /// The sentence around the tapped range — context for the lookup ("sagatta" in a stock sentence)
+        private func sentence(in text: String, around range: NSRange) -> String {
+            let ns = text as NSString
+            let enders = CharacterSet(charactersIn: ".!?。！？")
+            var start = range.location
+            while start > 0, let scalar = UnicodeScalar(ns.character(at: start - 1)), !enders.contains(scalar) { start -= 1 }
+            var end = range.location + range.length
+            while end < ns.length, let scalar = UnicodeScalar(ns.character(at: end)), !enders.contains(scalar) { end += 1 }
+            if end < ns.length { end += 1 }
+            return ns.substring(with: NSRange(location: start, length: end - start)).trimmingCharacters(in: .whitespaces)
         }
 
         func textView(_ textView: UITextView, shouldInteractWith URL: URL, in characterRange: NSRange, interaction: UITextItemInteraction) -> Bool {
@@ -421,6 +592,14 @@ private struct SelectableTextView: UIViewRepresentable {
                     if let word = vocabulary.first(where: { $0.id == id }) {
                         onVocabTap(word)
                     }
+                }
+                return false
+            }
+            if URL.scheme == "lookup" {
+                let word = URLComponents(url: URL, resolvingAgainstBaseURL: false)?
+                    .queryItems?.first(where: { $0.name == "w" })?.value ?? ""
+                if !word.isEmpty {
+                    onLookupTap(word, sentence(in: textView.text ?? "", around: characterRange))
                 }
                 return false
             }

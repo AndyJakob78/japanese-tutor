@@ -1,5 +1,19 @@
 # Vocabulary Management Skill
 
+## CRITICAL: Romaji Must Match Kana Exactly
+The `word_romaji_macron` field MUST be the correct Hepburn romanisation of `word_kana`.
+The pipeline validates every word using `wanakana.toRomaji(word_kana)` and will reject the
+article if your romaji does not phonetically match the kana reading.
+
+Rules:
+- Derive romaji directly from the kana — do NOT guess or transliterate from kanji alone.
+- Use macrons for long vowels: ā ī ū ē ō (e.g., おう → ō, うう → ū).
+- Do NOT write "ou", "oo", or "uu" for long vowels.
+- Voicing, small tsu (っ), and nasal n (ん) must be correct.
+
+Example of a REJECTED hallucination:
+  word_kanji: 堅固, word_kana: けんご → word_romaji_macron MUST be "kengo", NOT "katayoku".
+
 ## Word Status Lifecycle
 ```
 new → learning → known → mastered
