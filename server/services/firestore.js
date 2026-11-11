@@ -24,6 +24,7 @@ const collections = {
   newsCache: firestore.collection('news_cache'),
   counters: firestore.collection('counters'), // For auto-incrementing IDs
   devices: firestore.collection('devices'),   // Per-device trial + Pro status
+  mistakes: firestore.collection('mistakes'), // Sentence-building corrections (mistake memory)
 };
 
 // --- Auto-increment ID helper ---

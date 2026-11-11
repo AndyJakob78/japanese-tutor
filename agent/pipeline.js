@@ -16,6 +16,7 @@ const { runQualityReviewer } = require('./middleware/quality-reviewer');
 const { autoFixHallucinatedRomaji } = require('./middleware/wanakana-fix');
 const { convertScript, splitLongSentences } = require('./middleware/script-converter');
 const { applyProperNouns } = require('./middleware/proper-nouns');
+const { loadMistakes, summarizeWeakSpots, weakSpotsPrompt } = require('../server/services/mistakes');
 const { buildNumberCheatSheet } = require('./middleware/numbers-formatter');
 const { correctVocabLevels, lookupLevel } = require('./middleware/jlpt-levels');
 const { findGiveaways, countProblems, describeProblems } = require('./middleware/quiz-check');
@@ -1112,6 +1113,8 @@ The user has ZERO previously-learned words. You MUST NOT use any [REVIEW] marker
 ${knownWords.slice(0, 30).join(', ')}
 Prefer words from the START of this list that fit the story. Skip any listed word you know is harder than ${JLPT_ORDER[Math.min(JLPT_ORDER.indexOf(config.proficiency_level) + 1, JLPT_ORDER.length - 1)] || 'N3'} (some stored levels are wrong). Aim for ~5-8 of these to appear in the article wrapped in [REVIEW] markers. If fewer than 5 are listed above, use whatever is available — do not invent [REVIEW] markers for words NOT in this list.`}
 
+${weakSpotsPrompt(config._weak_spots)}
+
 Rules: ${wsPrompt.userRules}`;
 
   // `let` (not `const`) so the judge can replace fields on script-bleeding errors
@@ -1718,13 +1721,16 @@ function sortByReviewNeed(vocab, targetLevel, now = Date.now()) {
 }
 
 async function prefetchAllData(userId, overrides) {
-  const [config, allArticlesSnapshot, allVocabSnapshot] = await Promise.all([
+  const [config, allArticlesSnapshot, allVocabSnapshot, mistakes] = await Promise.all([
     loadConfig(userId),
     collections.articles.where('user_id', '==', userId).get(),
     collections.vocabulary.where('user_id', '==', userId).get(),
+    loadMistakes(userId).catch(() => []),   // mistake memory must never block an article
   ]);
 
   const mergedConfig = { ...config, ...overrides };
+  // Grammar slips from sentence building: the article uses these patterns on purpose
+  mergedConfig._weak_spots = summarizeWeakSpots(mistakes, 3);
 
   // Pre-sort recent articles (used by news search for dedup + round-robin)
   const recentArticles = allArticlesSnapshot.docs

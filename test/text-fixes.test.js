@@ -115,3 +115,20 @@ test('reviewer safety net counts sentences', () => {
   assert.equal(sentenceCount('A desu. B desu. C desu.'), 3);
   assert.equal(sentenceCount(''), 0);
 });
+
+test('mistake memory groups the same slip and builds the article hint', () => {
+  const { patternKey, summarizeWeakSpots, weakSpotsPrompt } = require('../server/services/mistakes');
+  assert.equal(patternKey('WO -> GA with agaru '), 'wo → ga with agaru');
+  const m = (pattern, at, type = 'particle') => ({ type, pattern: patternKey(pattern), created_at: at, wrote: 'wo', correct: 'ga', why: 'agaru happens by itself' });
+  const spots = summarizeWeakSpots([
+    m('ni → de for place of action', '2026-11-11T10:00:00Z'),
+    m('wo → ga with agaru', '2026-11-10T10:00:00Z'),
+    m('wo->ga with agaru', '2026-11-09T10:00:00Z'),
+    m('masu-form after tai', '2026-11-11T11:00:00Z', 'verb_form'),
+  ]);
+  assert.equal(spots[0].pattern, 'wo → ga with agaru');
+  assert.equal(spots[0].count, 2);
+  assert.equal(spots[1].pattern, 'masu-form after tai');      // tie on count: most recent first
+  assert.match(weakSpotsPrompt(spots), /Particles: wo → ga with agaru/);
+  assert.equal(weakSpotsPrompt([]), '');
+});
