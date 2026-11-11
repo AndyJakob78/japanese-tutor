@@ -34,6 +34,16 @@ const FOREIGN_SOUNDS = {
   'クァ': 'kwa', 'グァ': 'gwa', 'イェ': 'ye', 'シェ': 'she', 'ジェ': 'je', 'チェ': 'che',
 };
 const MACRON = { a: 'ā', i: 'ī', u: 'ū', e: 'ē', o: 'ō' };
+
+const NATIVE_TSU = {
+  '一': 'ひとつ', '二': 'ふたつ', '三': 'みっつ', '四': 'よっつ', '五': 'いつつ',
+  '六': 'むっつ', '七': 'ななつ', '八': 'やっつ', '九': 'ここのつ',
+  1: 'ひとつ', 2: 'ふたつ', 3: 'みっつ', 4: 'よっつ', 5: 'いつつ',
+  6: 'むっつ', 7: 'ななつ', 8: 'やっつ', 9: 'ここのつ',
+};
+
+// Na-adjectives usually written in kana; "いろいろな" came out "iroirona" (2026-11-11)
+const KANA_NA_ADJECTIVES = ['いろいろ', 'きれい', 'すてき', 'ひま', 'だめ', 'いや', 'げんき', 'だいじょうぶ', 'たいへん', 'かんたん', 'じょうず', 'へた', 'しずか', 'にぎやか', 'たいせつ', 'べんり', 'ふべん', 'とくべつ', 'ゆうめい', 'しんせつ', 'まじめ', 'らく'];
 const FOREIGN_RE = new RegExp(`(${Object.keys(FOREIGN_SOUNDS).sort((a, b) => b.length - a.length).join('|')})(ー?)`, 'g');
 
 /**
@@ -161,6 +171,15 @@ function convertKanjiFuriganaToRomaji(text) {
   if (!text) return text;
   let out = fixDigitCounterReadings(fullwidthToHalfwidth(text));
 
+  // Native counter つ (2026-11-11): 二（に）つ目 came out "nitsume", 九（きゅう）つ目
+  // "kyūtsume", 2つ目 "2tsume". The つ counter uses native readings (futatsu,
+  // kokonotsu). A space follows unless 目 (ordinal: futatsume) does.
+  out = out.replace(/(?:([一二三四五六七八九])（[ぁ-ゖ]+）|(?<![0-9])([1-9]))つ(?!（)/g, (m, kanji, digit) => {
+    const native = NATIVE_TSU[kanji || digit];
+    return native ? ` ${native} ` : m;
+  });
+  out = out.replace(/ (目（め）)/g, '$1');
+
   // Step 0: Pre-split for readability — insert spaces in places where the
   // kanji+furigana source has no space but romaji conventions want one.
   //
@@ -174,7 +193,7 @@ function convertKanjiFuriganaToRomaji(text) {
   //     Match し+(ま|て|よ|な|え) (covers shimasu, shite, shiyō, shinai, shiete)
   //     and す+(る) (dictionary form), さ+(れ|せ) (passive/causative).
   //     EXCLUDES adjective endings like 新（あたら）しい (matches し but next char is い → no split).
-  out = out.replace(/）(し[まてよなえ])/g, '） $1');
+  out = out.replace(/）(し[まてよなえた])/g, '） $1');   // + した/したい (riyō shitai, 2026-11-11)
   out = out.replace(/）(する)/g, '） $1');
   out = out.replace(/）(さ[れせ])/g, '） $1');
   // (c) Particles after a kanji+furigana noun:
@@ -190,7 +209,7 @@ function convertKanjiFuriganaToRomaji(text) {
   //   gone entirely (小（ちい）さい was coming out "chii sai").
   //   が is not split before ら/り/る/れ/ろ/っ: that is the okurigana of -garu
   //   verbs (上（あ）がらない stays "agaranai", not "a garanai" — 2026-11-10, #205).
-  out = out.replace(/）([はをにでとものへやねよだ]|が(?![らりるれろっ])|まで|など|な(?![いくかけさ])|か(?=ら|[\s。、！？]|$))/g, '） $1');
+  out = out.replace(/）([はをにでとものへねよ]|だ(?!ち)|や(?!か)|が(?![らりるれろっ])|まで|など|な(?![いくかけさ])|か(?=ら|[\s。、！？]|$))/g, '） $1');
 
   // (d) Boundary between katakana/hiragana and Latin letters (both directions).
   //     スタートアップAleph → スタートアップ Aleph → "sutātoappu Aleph"
@@ -238,6 +257,54 @@ function convertKanjiFuriganaToRomaji(text) {
   out = out.replace(/よう([なに])(?=[ぁ-ゖァ-ヺ一-鿿々])/g, 'よう $1 ');
   out = out.replace(/よう([なに])(?![ぁ-ゖ])/g, 'よう $1');
 
+  // (e5) Na-adjective + な is two words (2026-11-11, "iroirona", "sukinatabemono"):
+  //     kana na-adjectives, okurigana ones (静（しず）かな, 鮮（あざ）やかな, 好（す）きな,
+  //     嫌（きら）いな), and a space after a standalone な before the next word.
+  //     大（おお）きな / 小（ちい）さな are prenominal adjectives written as one
+  //     word in Hepburn (ōkina, chiisana) — only a space after them.
+  out = out.replace(new RegExp(`(${KANA_NA_ADJECTIVES.join('|')})な(?=[^ぁ-ゖ]|$)`, 'g'), '$1 な ');
+  out = out.replace(/（([ぁ-ゖ]+)）(やか|か)な(?![ぁ-ゖ])/g, '（$1）$2 な ');
+  out = out.replace(/(好（す）き|嫌（きら）い)な(?![ \u3000ぁ-ゖ])/g, '$1 な ');
+  out = out.replace(/(大（おお）きな|小（ちい）さな)(?=[一-鿿々ァ-ヺ])/g, '$1 ');
+  out = out.replace(/ な(?=[一-鿿々ァ-ヺ])/g, ' な ');
+
+  // (e6) A verb/adjective ending followed by a new kanji word (2026-11-11,
+  //     "riyōshitaihito"): 利用（りよう）したい人（ひと） → "riyō shitai hito".
+  //     Only clear endings — い/き/け/り stay joined because they are often
+  //     inside compounds (言（い）い方（かた）, 取（と）り組（く）み).
+  out = out.replace(/(たい|ない|る|た)([一-鿿々]+（)/g, '$1 $2');
+  //     i-adjective before a noun: 新（あたら）しい家（いえ） → "atarashii ie",
+  //     高（たか）い山（やま） → "takai yama" — but 言（い）い方（かた） stays "iikata"
+  out = out.replace(/(）[ぁ-ゖ]?い)(?!方（)([一-鿿々]+（)/g, '$1 $2');
+  // hiragana → digit: で2つ目 → "de 2"
+  out = out.replace(/([ぁ-ゖ])([0-9])/g, '$1 $2');
+
+  // (e7) Leftovers from the 2026-11-11 dry runs:
+  //   - Suffix kanji that Claude gives their own furigana belong to the word
+  //     before: 美術（びじゅつ）館（かん） → "bijutsukan" (not "bijutsu kan"),
+  //     2年（ねん）間（かん） → "2-nenkan", 経済（けいざい）的（てき） → "keizaiteki".
+  out = out.replace(/） ((?:館（かん）|者（しゃ）|員（いん）|店（てん）|的（てき）|性（せい）|化（か）|人（[じに]ん）|製（せい）|式（しき）|料（りょう）|費（ひ）|場（じょう）|所（[しじ]ょ）|室（しつ）|中（[じち]ゅう）|間（かん）|用（よう）|内（ない）))/g, '）$1');
+  //   - ごとに is "goto ni": 部（ぶ）ごとに → "bu goto ni" (was "bugotoni")
+  out = out.replace(/）ごと/g, '） ごと');
+  out = out.replace(/ごとに/g, 'ごと に');
+  //   - Short demonstratives + particle: ここには → "koko ni wa", それは → "sore wa"
+  out = out.replace(/(?<![ぁ-ゖ])(ここ|そこ|どこ|あそこ|これ|それ|あれ|どれ)([にでもはがをへ])/g, '$1 $2');
+  //   - には / では are two particles: "ni wa", "de wa" (was "niwa"),
+  //     also in ではありません → "de wa arimasen"
+  out = out.replace(/(^|[\s）])([にで])は(?=[\s。、！？]|$|[一-鿿々ァ-ヺ0-9]|あり|ある)/g, '$1$2 は ');
+  //   - Plural suffix + particle: 子（こ）どもがいます → "kodomo ga imasu"
+  out = out.replace(/(ども|たち|だち)([がはをにもでと])/g, '$1 $2');
+  //   - Copula + quote: 学生（がくせい）だと思（おも）います → "gakusei da to omoimasu"
+  out = out.replace(/(^|[\s）])だと/g, '$1だ と');
+  out = out.replace(/(^|[\s）])なので/g, '$1な ので');   // 雨（あめ）なので → "ame na node"
+  //   - Particle + verb starting with a vowel: があります → "ga arimasu"
+  //     (was "gārimasu": the two a's became a macron), という → "to iu"
+  out = out.replace(/(^|[\s）])([がもにでをと])(あ[りるっらろれ]|い[まるてなたうっ])/g, '$1$2 $3');
+  //   - という before a noun: という意味（いみ） → "to iu imi"
+  out = out.replace(/(いう)([一-鿿々]+（)/g, '$1 $2');
+  //   - Conjunction before a kanji word: だから行（い）きます → "dakara ikimasu"
+  out = out.replace(/(から|ので|のに|けど|けれど|しかし|でも|そして)([一-鿿々]+（)/g, '$1 $2');
+
   // (f) Particle after a LONG hiragana run (3+ chars to avoid false positives
   //     on 2-char words like なに, おに, あに). Catches cases like:
   //     ありがとう を → covered, ところに → covered.
@@ -270,8 +337,8 @@ function convertKanjiFuriganaToRomaji(text) {
   out = out.replace(/([^\s])(\[(?:NEW|REVIEW)\])/g, '$1 $2');
   out = out.replace(/(\[(?:NEW|REVIEW)\])([^\s])/g, '$1 $2');
 
-  // Step 5: Collapse multiple spaces.
-  out = out.replace(/ {2,}/g, ' ');
+  // Step 5: Collapse multiple spaces; no space at the start or before punctuation.
+  out = out.replace(/ {2,}/g, ' ').replace(/^ +/, '').replace(/ +([.,!?])/g, '$1');
 
   // Step 6: Sentence-initial capitalization (Hepburn convention).
   out = capitalizeSentences(out);

@@ -203,8 +203,20 @@ function fixStoredSpelling(text) {
   return text
     .replace(/([Vv])y([aieo])/g, '$1$2')
     .replace(/([Vv])u([aeo])/g, '$1$2')
-    .replace(/(^|[^A-Za-zāīūēō])(no)?yō(na|ni)(?![A-Za-zāīūēō])/g, (m, pre, no, end) => `${pre}${no ? 'no ' : ''}yō ${end}`);
+    .replace(/(^|[^A-Za-zāīūēō])(no)?yō(na|ni)(?![A-Za-zāīūēō])/g, (m, pre, no, end) => `${pre}${no ? 'no ' : ''}yō ${end}`)
+    // na-adjective glued to na: "iroirona" → "iroiro na"
+    .replace(NA_ADJ_GLUED, (m, pre, adj) => `${pre}${adj} na`)
+    // つ counter read with Sino-Japanese numbers: "nitsume" → "futatsume"
+    .replace(/(^|[^A-Za-zāīūēō])(ichi|ni|san|yon|go|roku|hachi|kyū)tsu(me)?(?![A-Za-zāīūēō])/gi,
+      (m, pre, num, me) => `${pre}${matchCase(NATIVE_TSU[num.toLowerCase()], num)}${me || ''}`);
 }
+
+const NA_ADJECTIVES = ['iroiro', 'kirei', 'suteki', 'hima', 'dame', 'genki', 'daijōbu', 'taihen', 'kantan', 'jōzu', 'heta',
+  'shizuka', 'nigiyaka', 'taisetsu', 'benri', 'fuben', 'tokubetsu', 'yūmei', 'shinsetsu', 'majime', 'suki', 'kirai',
+  'azayaka', 'yutaka', 'tashika', 'hitsuyō', 'anzen', 'kiken', 'jiyū', 'fushigi'];
+const NA_ADJ_GLUED = new RegExp(`(^|[^A-Za-zāīūēō])(${NA_ADJECTIVES.join('|')})na(?![A-Za-zāīūēō])`, 'gi');
+const NATIVE_TSU = { ichi: 'hitotsu', ni: 'futatsu', san: 'mittsu', yon: 'yottsu', go: 'itsutsu', roku: 'muttsu', hachi: 'yattsu', kyū: 'kokonotsu' };
+const matchCase = (word, like) => (like[0] === like[0].toUpperCase() ? word[0].toUpperCase() + word.slice(1) : word);
 
 /**
  * Spell out numbers in an article object (and its quiz/vocab context) for a

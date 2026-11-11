@@ -39,23 +39,33 @@ function applyProperNouns(text, names) {
         const twins = Object.keys(FOLD).filter(k => FOLD[k] === f);
         return `[${f}${f.toUpperCase()}${twins.join('')}]`;
       })
-      .join('[\\s-]?');
+      // spaces/hyphens between letters are optional; a vocabulary marker
+      // ("fukui [NEW] ken", 2026-11-11 dry run) may sit there too
+      .join('(?:\\s*\\[(?:NEW|REVIEW)\\]\\s*|[\\s-])?');
     const re = new RegExp(`(?<![A-Za-zāīūēōĀĪŪĒŌ])${pattern}(?![A-Za-zāīūēōĀĪŪĒŌ])`, 'g');
     out = out.replace(re, match => rebuild(match, name));
   }
   return out;
 }
 
-/** Text letters (with their macrons), name's capitals and separators. */
+/** Text letters (with their macrons), name's capitals and separators.
+ *  [NEW]/[REVIEW] markers inside the match stay before the same letter;
+ *  the separator there becomes a space so the marker stays its own token. */
 function rebuild(match, name) {
-  const textLetters = [...match].filter(c => LETTER.test(c));
+  const textLetters = [];
+  const markers = {};
+  for (const m of match.matchAll(/\[(?:NEW|REVIEW)\]|[A-Za-zāīūēōĀĪŪĒŌ]/g)) {
+    if (m[0].length > 1) markers[textLetters.length] = m[0];
+    else textLetters.push(m[0]);
+  }
   let i = 0;
   let result = '';
   for (const c of name) {
     if (LETTER.test(c)) {
+      if (markers[i]) result = result.replace(/[\s-]*$/, result ? ' ' : '') + markers[i] + ' ';
       const t = textLetters[i++];
       result += c === c.toUpperCase() && c !== c.toLowerCase() ? t.toUpperCase() : t.toLowerCase();
-    } else if (/[\s-]/.test(c)) {
+    } else if (/[\s-]/.test(c) && !/\s$/.test(result)) {
       result += c;
     }
   }

@@ -49,7 +49,43 @@ test('spaces at word boundaries and yō na / yō ni (#211)', () => {
   assert.equal(romaji('家賃（やちん）は 上（あ）がらない と 思（おも）われて いました。'), 'Yachin wa agaranai to omowarete imashita.');
 });
 
+test('na-adjectives, suru forms, i-adjectives and つ counters (Kyoto hotel dry run)', () => {
+  assert.equal(romaji('ホテルは いろいろな サービスを 提供（ていきょう）します。'), 'Hoteru wa iroiro na sābisu wo teikyō shimasu.');
+  assert.equal(romaji('きれいな部屋（へや）です。'), 'Kirei na heya desu.');
+  assert.equal(romaji('静（しず）かな町（まち）'), 'Shizuka na machi');
+  assert.equal(romaji('鮮（あざ）やかな色（いろ）'), 'Azayaka na iro');
+  assert.equal(romaji('大（おお）きな家（いえ）'), 'Ōkina ie');                  // prenominal: one word
+  assert.equal(romaji('利用（りよう）したい人（ひと）'), 'Riyō shitai hito');
+  assert.equal(romaji('新（あたら）しい家（いえ）'), 'Atarashii ie');
+  assert.equal(romaji('言（い）い方（かた）'), 'Iikata');                        // compound stays joined
+  assert.equal(romaji('京都（きょうと）で二（に）つ目（め）のホテル'), 'Kyōto de futatsume no hoteru');
+  assert.equal(romaji('日本（にほん）では九（きゅう）つ目（め）です。'), 'Nihon de wa kokonotsume desu.');
+  assert.equal(romaji('三（さん）つの会社（かいしゃ）'), 'Mittsu no kaisha');
+  assert.equal(romaji('ロボットや機械（きかい）'), 'Robotto ya kikai');
+});
+
+test('ni wa, de wa, goto ni, suffix kanji, ga arimasu (dry-run leftovers)', () => {
+  assert.equal(romaji('東京（とうきょう）には美術（びじゅつ）館（かん）があります。'), 'Tōkyō ni wa bijutsukan ga arimasu.');
+  assert.equal(romaji('ここには店（みせ）がありません。'), 'Koko ni wa mise ga arimasen.');
+  assert.equal(romaji('問題（もんだい）ではありません。'), 'Mondai de wa arimasen.');
+  assert.equal(romaji('部（ぶ）ごとに分（わ）けます。'), 'Bu goto ni wakemasu.');
+  assert.equal(romaji('博物（はくぶつ）館（かん）'), 'Hakubutsukan');
+  assert.equal(romaji('日本（にほん）人（じん）の作家（さっか）'), 'Nihonjin no sakka');
+  assert.equal(romaji('経済（けいざい）的（てき）な問題（もんだい）'), 'Keizaiteki na mondai');
+  assert.equal(romaji('ホテルがあります。'), 'Hoteru ga arimasu.');               // was "gārimasu"
+  assert.equal(romaji('子（こ）どもがいます。'), 'Kodomo ga imasu.');
+  assert.equal(romaji('友（とも）だちと会（あ）います。'), 'Tomodachi to aimasu.');
+  assert.equal(romaji('新（あたら）しい技術（ぎじゅつ）という意味（いみ）です。'), 'Atarashii gijutsu to iu imi desu.');
+  assert.equal(romaji('学生（がくせい）だと思（おも）います。'), 'Gakusei da to omoimasu.');
+  assert.equal(romaji('雨（あめ）なので家（いえ）にいます。'), 'Ame na node ie ni imasu.');
+  assert.equal(romaji('だから行（い）きます。'), 'Dakara ikimasu.');
+  assert.equal(romaji('人（ひと）に会（あ）います。'), 'Hito ni aimasu.');
+});
+
 test('stored articles are corrected on display', () => {
+  assert.equal(fixStoredSpelling('iroirona sābisu'), 'iroiro na sābisu');
+  assert.equal(fixStoredSpelling('Kyōto de nitsume no kōtoyādo. Nihon de wa kyūtsume desu.'), 'Kyōto de futatsume no kōtoyādo. Nihon de wa kokonotsume desu.');
+  assert.equal(fixStoredSpelling('kinō no tsuzuki'), 'kinō no tsuzuki');
   assert.equal(fixStoredSpelling('atarashii vyira no hoteru'), 'atarashii vira no hoteru');
   assert.equal(fixStoredSpelling('jibun no ie no yōna heya'), 'jibun no ie no yō na heya');
   assert.equal(fixStoredSpelling('noyōni'), 'no yō ni');
@@ -67,6 +103,11 @@ test('proper nouns get capitals only where the letters match', () => {
   assert.equal(
     applyProperNouns('Basho wa purinsugurandorizōtokaruizawa desu. Naganoken no karuizawa. Karuizawasan.', names),
     'Basho wa Purinsu Gurando Rizōto Karuizawa desu. Nagano-ken no Karuizawa. Karuizawasan.'
+  );
+  // a vocabulary marker inside a name (Fukui station dry run)
+  assert.equal(
+    applyProperNouns('fukui [NEW] ken no echizen shi ni', [{ romaji: 'Fukui-ken' }, { romaji: 'Echizen-shi' }]),
+    'Fukui [NEW] ken no Echizen-shi ni'
   );
 });
 
