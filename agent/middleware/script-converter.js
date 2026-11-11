@@ -312,6 +312,12 @@ function convertKanjiFuriganaToRomaji(text) {
   //     here anyway per the kanji-mode skill; we accept the false negative.
   out = out.replace(/([぀-ゟ]{3,})([はがをにでとものへ])(?=[\s。、！？]|$)/g, '$1 $2');
 
+  // Step 0.9: Katakana needs no furigana, but Claude sometimes adds it:
+  // パーセント（ぱーせんと） came out "pāsento(pa- sento)" and the read-aloud
+  // voice read the word twice (2026-11-11). Drop it.
+  out = out.replace(/([ァ-ヺー])（[぀-ゟ゠-ヿー\s]+）/g, '$1');
+  out = out.replace(/([%％])（[぀-ゟ゠-ヿー\s]+）/g, '$1');   // 9%（パーセント） → "9%" (read as pāsento later)
+
   // Step 1: Strip kanji, keep only the furigana kana.
   out = out.replace(/[一-鿿々]+（([぀-ゟ゠-ヿー]+)）/g, '$1');
 

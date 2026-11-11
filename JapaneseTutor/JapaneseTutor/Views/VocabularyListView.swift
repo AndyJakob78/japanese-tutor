@@ -102,6 +102,7 @@ struct VocabularyListView: View {
     @State private var viewModel = VocabularyViewModel()
     @State private var showVocabQuiz = false
     @State private var showTypedReview = false
+    @State private var showMistakes = false
     @AppStorage("lastTypedReviewDate") private var lastTypedReviewDate = ""
 
     var body: some View {
@@ -154,6 +155,30 @@ struct VocabularyListView: View {
                             Text(lastTypedReviewDate == TypedReviewView.today
                                  ? "Done today — you can go again"
                                  : "Type 10 words from memory · 3 min")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+
+                // Mistake memory — corrections from Build Sentences
+                Button {
+                    showMistakes = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "scope")
+                            .font(.title2)
+                            .foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("My Mistakes")
+                                .font(.headline)
+                            Text("Your weak spots from Build Sentences")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -282,6 +307,11 @@ struct VocabularyListView: View {
         .fullScreenCover(isPresented: $showTypedReview) {
             NavigationStack {
                 TypedReviewView()
+            }
+        }
+        .sheet(isPresented: $showMistakes) {
+            NavigationStack {
+                MistakesView()
             }
         }
     }

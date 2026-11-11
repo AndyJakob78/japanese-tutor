@@ -198,9 +198,16 @@ const QUIZ_FIELDS = ['question_romaji', 'correct_answer', 'hint', 'explanation']
  * "yōna"/"yōni"/"noyōna" → "yō na"/"yō ni"/"no yō na". Native Hepburn has
  * no "v", so vy-/vu+vowel only ever came from ヴ.
  */
+const FOLD_MACRONS = { ā: 'a', ī: 'i', ū: 'u', ē: 'e', ō: 'o' };
+const foldLetters = t => t.toLowerCase().replace(/[āīūēō]/g, c => FOLD_MACRONS[c]).replace(/[^a-z]/g, '');
+
 function fixStoredSpelling(text) {
   if (!text || typeof text !== 'string') return text;
   return text
+    // reading repeated in brackets: "pāsento(pāsento)", "pāsento (pa- sento)" → "pāsento"
+    .replace(/([A-Za-zāīūēō]+)\s?\(([^)]{1,40})\)/g, (m, word, inner) => (foldLetters(inner) === foldLetters(word) ? word : m))
+    // "9%(pāsento)": the % is read as pāsento anyway
+    .replace(/%\s?\(\s?p[aā]-?\s?sento\s?\)/gi, '%')
     .replace(/([Vv])y([aieo])/g, '$1$2')
     .replace(/([Vv])u([aeo])/g, '$1$2')
     .replace(/(^|[^A-Za-zāīūēō])(no)?yō(na|ni)(?![A-Za-zāīūēō])/g, (m, pre, no, end) => `${pre}${no ? 'no ' : ''}yō ${end}`)

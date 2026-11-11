@@ -17,6 +17,12 @@ class APIClient {
     /// On first launch: uses IDFV if available, otherwise generates a UUID.
     /// Once stored in Keychain, the same ID is returned forever — even after reinstall.
     var userId: String {
+        #if DEBUG
+        // Simulator testing only: launch with `-debugUserId <id>` to open an existing account
+        if let debugId = UserDefaults.standard.string(forKey: "debugUserId"), !debugId.isEmpty {
+            return debugId
+        }
+        #endif
         // 1. Check Keychain first (survives reinstalls)
         if let saved = KeychainHelper.read(key: "deviceUserId") {
             return saved
@@ -155,13 +161,36 @@ class APIClient {
     }
 
     /// Claude checks a sentence the learner wrote with the given words
-    func checkSentence(words: [VocabularyWord], sentence: String, context: String?) async throws -> SentenceCheckResponse {
+    /// `focus`: the learner's top weak spot, so the check watches for it.
+    /// `firstTry`: only first tries are saved as mistakes (no double counting on "Check again").
+    func checkSentence(words: [VocabularyWord], sentence: String, context: String?, focus: String? = nil, firstTry: Bool = true) async throws -> SentenceCheckResponse {
         let body = SentenceCheckRequest(
             words: words.map { .init(word: $0.wordRomajiMacron, meaning: $0.meaningEn) },
             sentence: sentence,
-            context: context
+            context: context,
+            focus: focus,
+            firstTry: firstTry
         )
         return try await post("/practice/sentence", body: body)
+    }
+
+    /// Sentences of an article for the read-aloud player (cloud voice)
+    func fetchSpeech(articleId: Int) async throws -> SpeechResponse {
+        return try await get("/articles/\(articleId)/speech")
+    }
+
+    /// MP3 of one sentence, read by the cloud voice
+    func fetchSentenceAudio(articleId: Int, index: Int, voice: String) async throws -> Data {
+        var request = makeRequest("/articles/\(articleId)/speech/\(index)?voice=\(voice)")
+        request.timeoutInterval = 20
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validateResponse(response)
+        return data
+    }
+
+    /// Saved sentence-building corrections + weak spots (most frequent first)
+    func fetchMistakes() async throws -> MistakesResponse {
+        return try await get("/practice/mistakes")
     }
 
     // MARK: - Quiz
@@ -336,6 +365,13 @@ struct SentenceCheckRequest: Encodable {
     let words: [Word]
     let sentence: String
     let context: String?
+    let focus: String?
+    let firstTry: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case words, sentence, context, focus
+        case firstTry = "first_try"
+    }
 }
 
 struct SentenceCheckResponse: Codable {
@@ -343,6 +379,8 @@ struct SentenceCheckResponse: Codable {
         let wrote: String
         let correct: String
         let why: String
+        let type: String?       // particle | verb_form | word_order | word_choice | adjective | other
+        let pattern: String?    // "wo → ga with agaru"
     }
     struct WordUse: Codable {
         let word: String
@@ -359,6 +397,64 @@ struct SentenceCheckResponse: Codable {
     let fixes: [Fix]
     let words: [WordUse]
     let tip: String
+}
+
+/// GET /api/articles/:id/speech
+struct SpeechResponse: Codable {
+    let sentences: [String]
+}
+
+/// GET /api/practice/mistakes
+struct MistakesResponse: Codable {
+    let weakSpots: [WeakSpot]
+    let mistakes: [SavedMistake]
+    let count: Int
+
+    enum CodingKeys: String, CodingKey {
+        case weakSpots = "weak_spots"
+        case mistakes, count
+    }
+}
+
+struct WeakSpot: Codable, Identifiable, Hashable {
+    struct Example: Codable, Hashable {
+        let wrote: String
+        let correct: String
+        let why: String
+    }
+    let type: String
+    let typeLabel: String
+    let pattern: String
+    let count: Int
+    let example: Example
+
+    var id: String { "\(type)|\(pattern)" }
+
+    /// Sent to the sentence check so it watches for this slip
+    var focusText: String { "\(pattern) (e.g. \(example.wrote) → \(example.correct))" }
+
+    enum CodingKeys: String, CodingKey {
+        case type, pattern, count, example
+        case typeLabel = "type_label"
+    }
+}
+
+struct SavedMistake: Codable, Identifiable, Hashable {
+    let createdAt: String
+    let type: String
+    let pattern: String
+    let wrote: String
+    let correct: String
+    let why: String
+    let sentence: String
+    let corrected: String
+
+    var id: String { "\(createdAt)|\(wrote)|\(correct)" }
+
+    enum CodingKeys: String, CodingKey {
+        case type, pattern, wrote, correct, why, sentence, corrected
+        case createdAt = "created_at"
+    }
 }
 
 // MARK: - Errors

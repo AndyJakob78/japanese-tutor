@@ -2,6 +2,7 @@
 // POST /api/articles/generate — trigger article generation pipeline
 // GET  /api/articles — list all articles (paginated)
 // GET  /api/articles/:id — get full article with vocabulary + quiz
+// GET  /api/articles/:id/speech(/:index) — read-aloud sentences / MP3 per sentence
 // PATCH /api/articles/:id — mark as read
 // DELETE /api/articles/:id — delete article and optionally its vocabulary
 
@@ -11,6 +12,7 @@ const { collections } = require('../services/firestore');
 const { runPipeline, getArticleWithDetails } = require('../../agent/pipeline');
 const { checkTrialStatus, incrementGenerationCount, FREE_TRIAL_LIMIT } = require('../services/deviceService');
 const { spellOutNumbers, spellOutArticle } = require('../../agent/middleware/spell-numbers');
+const { _internals: { fixStoredSpelling } } = require('../../agent/middleware/spell-numbers');
 
 // POST /api/articles/generate — trigger the full generation pipeline
 // Enforces hard paywall: 3 free articles per device, then Pro required.
@@ -90,8 +92,9 @@ router.get('/', async (req, res, next) => {
       const romaji = !data.writing_system || data.writing_system === 'romaji';
       return {
         id: data.id,
-        title_romaji: romaji ? spellOutNumbers(data.title_romaji) : data.title_romaji,
-        summary_romaji: romaji ? spellOutNumbers(data.summary_romaji) : data.summary_romaji,
+        // same display fixes as the article screen (list showed "vyira" while the article said "vira")
+        title_romaji: romaji ? spellOutNumbers(fixStoredSpelling(data.title_romaji)) : data.title_romaji,
+        summary_romaji: romaji ? spellOutNumbers(fixStoredSpelling(data.summary_romaji)) : data.summary_romaji,
         topic: data.topic,
         region: data.region,
         word_count: data.word_count,
@@ -127,6 +130,47 @@ router.get('/:id', async (req, res, next) => {
     }
 
     res.json(spellOutArticle(article));
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Only the article document (no vocabulary/quiz) — the read-aloud player calls this once per sentence. */
+async function loadArticleText(id, userId) {
+  const snap = await collections.articles
+    .where('id', '==', parseInt(id, 10))
+    .where('user_id', '==', userId)
+    .limit(1)
+    .get();
+  return snap.empty ? null : snap.docs[0].data();
+}
+
+// GET /api/articles/:id/speech — sentences for the read-aloud player (2026-11-11)
+// The app plays /speech/:index one by one; the text is the same display text
+// the article screen shows (spellOutArticle).
+router.get('/:id/speech', async (req, res, next) => {
+  try {
+    const { VOICES, DEFAULT_VOICE, splitSentences } = require('../services/speech');
+    const article = await loadArticleText(req.params.id, req.userId);
+    if (!article) return res.status(404).json({ error: 'Article not found' });
+    res.json({ voices: Object.keys(VOICES), default_voice: DEFAULT_VOICE, sentences: splitSentences(spellOutArticle(article).body_romaji) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/articles/:id/speech/:index — MP3 of one sentence (cached after the first play)
+router.get('/:id/speech/:index', async (req, res, next) => {
+  try {
+    const { splitSentences, sentenceAudio } = require('../services/speech');
+    const article = await loadArticleText(req.params.id, req.userId);
+    if (!article) return res.status(404).json({ error: 'Article not found' });
+    const sentences = splitSentences(spellOutArticle(article).body_romaji);
+    const i = parseInt(req.params.index, 10);
+    if (!(i >= 0 && i < sentences.length)) return res.status(404).json({ error: 'No such sentence' });
+    const audio = await sentenceAudio(sentences[i], String(req.query.voice || ''));
+    res.set({ 'Content-Type': 'audio/mpeg', 'Cache-Control': 'private, max-age=86400' });
+    res.send(audio);
   } catch (err) {
     next(err);
   }

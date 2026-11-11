@@ -32,6 +32,7 @@ function patternKey(p) {
 /** Save the corrections of one checked sentence. Never throws (a failed save must not break the check). */
 async function saveMistakes(userId, { fixes, sentence, corrected }) {
   if (!userId || !Array.isArray(fixes) || fixes.length === 0) return 0;
+  if (process.env.MISTAKES_READONLY === '1') return 0;   // local testing / screenshots: never save
   try {
     const now = new Date().toISOString();
     const batch = collections.mistakes.firestore.batch();

@@ -48,6 +48,8 @@ class ArticleDetailViewModel {
 struct ArticleDetailView: View {
     let articleId: Int
     @State private var viewModel = ArticleDetailViewModel()
+    @State private var speaker = ArticleSpeaker()
+    @State private var showAudio = false
 
     var body: some View {
         ScrollView {
@@ -143,6 +145,20 @@ struct ArticleDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
+                    // Listen — on-device Japanese voice
+                    Button {
+                        if let article = viewModel.article, let body = article.bodyRomaji {
+                            showAudio = true
+                            Task {
+                                await speaker.load(articleId: article.id, body: body)
+                                if !speaker.isPlaying { speaker.playPause() }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "speaker.wave.2")
+                    }
+                    .accessibilityLabel("Listen")
+
                     // Quiz button — always accessible
                     NavigationLink(destination: QuizView(articleId: articleId)) {
                         Image(systemName: "brain.head.profile")
@@ -181,6 +197,12 @@ struct ArticleDetailView: View {
         .sheet(isPresented: $viewModel.showWordLookup) {
             WordLookupSheet(viewModel: viewModel)
         }
+        .safeAreaInset(edge: .top) {
+            if showAudio {
+                ArticleAudioBar(speaker: speaker) { showAudio = false }
+            }
+        }
+        .onDisappear { speaker.stop() }
     }
 
     // MARK: - Sections

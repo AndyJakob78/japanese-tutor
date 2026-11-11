@@ -132,3 +132,20 @@ test('mistake memory groups the same slip and builds the article hint', () => {
   assert.match(weakSpotsPrompt(spots), /Particles: wo → ga with agaru/);
   assert.equal(weakSpotsPrompt([]), '');
 });
+
+test('read-aloud: sentences and hiragana for the voice', () => {
+  const { splitSentences, toSpeechKana } = require('../server/services/speech');
+  assert.deepEqual(splitSentences('[NEW] Kōjō desu. Yachin wa? Takai!'), ['Kōjō desu.', 'Yachin wa?', 'Takai!']);
+  assert.equal(toSpeechKana('Ie no nedan wa onaji deshita.'), 'いえ の ねだん わ おなじ でした。');
+  assert.equal(toSpeechKana('Tōkyō de wa kyū pāsento(pāsento) agarimashita.'), 'とうきょう で わ きゅう ぱあせんと あがりました。');
+  assert.equal(toSpeechKana('Fukui-ken no shinbun wo yomimasu.'), 'ふくい けん の しんぶん を よみます。');
+});
+
+test('katakana reading in brackets is not shown or read twice', () => {
+  assert.equal(romaji('約（やく）9パーセント（ぱーせんと）上（あ）がりました。').includes('('), false);
+  assert.equal(romaji('約（やく）9%（パーセント）です。').includes('('), false);
+  assert.equal(fixStoredSpelling('yaku kyū pāsento(pāsento) agarimashita.'), 'yaku kyū pāsento agarimashita.');
+  assert.equal(fixStoredSpelling('pāsento (pa- sento)'), 'pāsento');
+  assert.equal(spellOutNumbers(fixStoredSpelling('yaku 9%(pāsento) agarimashita')), 'Yaku kyū pāsento agarimashita');
+  assert.equal(fixStoredSpelling('Nihon (Japan) desu'), 'Nihon (Japan) desu');     // a real explanation stays
+});

@@ -84,12 +84,16 @@ In App Store Connect, under your app → **App Information**:
 Under **iOS App → 1.0 Prepare for Submission**:
 
 ### Screenshots
-Upload from `AppStoreAssets/screenshots/` in this order:
-1. `01_article_feed.png`
-2. `02_article_reading.png`
-3. `03_vocabulary.png`
-4. `04_quiz.png`
-5. `05_settings.png`
+Upload from `AppStoreAssets/screenshots-1.4-gemini/` in this order (final set = Gemini version, chosen 2026-11-11; replaces the old 5 mockups — delete those in App Store Connect first):
+1. `01_feed.png` — Learn Japanese from today's news
+2. `02_word.png` — Tap any word you don't know
+3. `03_sentence.png` — Write it. Get it corrected.
+4. `04_listen.png` — Hear every sentence (NEW in 1.4)
+5. `05_quiz.png` — Quizzes on what you just read
+6. `06_vocab.png` — Every word you learn, tracked
+
+Rebuild after app changes (from AppStoreAssets/screenshot-tool): `python3 compose_gemini.py raw ../screenshots-1.4-gemini`
+(Old mockups in `AppStoreAssets/screenshots/`, the drawn alternative in `screenshots-1.4/` — both for reference only.)
 
 Device slot: **6.7-inch Display** (covers all required sizes for new apps)
 

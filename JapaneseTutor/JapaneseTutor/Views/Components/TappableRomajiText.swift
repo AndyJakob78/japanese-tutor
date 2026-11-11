@@ -130,7 +130,7 @@ private func findVocabMatch(_ word: String, in lookup: [String: VocabularyWord],
 /// Article text with:
 /// - Native iOS text selection (drag to select, blue handles, Copy menu)
 /// - Bold + colored new vocabulary words (filtered: no particles/common words)
-/// - Tap any underlined vocabulary word to see inline translation right below that paragraph
+/// - Tap any underlined vocabulary word to see its translation in a small card at the bottom
 /// - Tap any other word to look it up (meaning in this sentence) and add it to your words
 /// - [NEW] and [REVIEW] markers stripped from display
 /// - Supports romaji, kana, and kanji writing systems
@@ -206,14 +206,44 @@ struct TappableRomajiText: View {
                     }
                 )
 
-                // Tooltip appears right below the paragraph where the word was tapped
-                if tappedParagraphIndex == idx, let word = tappedWord {
+            }
+        }
+        // The word card floats at the bottom of the screen. It used to sit below the
+        // tapped paragraph, but articles are often one long paragraph, so the card
+        // appeared under the whole article, off-screen. The article stays scrollable
+        // and tappable while the card is open; tapping another word updates it.
+        .sheet(isPresented: cardShown) {
+            Group {
+                if let word = tappedWord {
                     wordTooltip(word)
-                } else if tappedParagraphIndex == idx, let lookup {
+                } else if let lookup {
                     lookupTooltip(lookup)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 22)
+            .padding(.bottom, 8)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
+            .presentationDetents([.height(max(cardHeight, 90))])
+            .presentationDragIndicator(.visible)
+            .presentationBackgroundInteraction(.enabled)
+            .presentationCornerRadius(22)
         }
+    }
+
+    @State private var cardHeight: CGFloat = 110
+
+    private var cardShown: Binding<Bool> {
+        Binding(
+            get: { tappedWord != nil || lookup != nil },
+            set: { shown in
+                if !shown {
+                    tappedWord = nil
+                    lookup = nil
+                    tappedParagraphIndex = -1
+                }
+            }
+        )
     }
 
     // MARK: Lookup of any word
@@ -357,7 +387,9 @@ struct TappableRomajiText: View {
                     .foregroundStyle(.secondary)
             }
             Button {
-                onWordTap(word)
+                tappedWord = nil
+                tappedParagraphIndex = -1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onWordTap(word) }
             } label: {
                 Image(systemName: "info.circle")
                     .font(.body)

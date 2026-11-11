@@ -17,6 +17,8 @@ class SentencePracticeViewModel {
 
     var rounds: [Round] = []
     var currentIndex = 0
+    /// The learner's most frequent slip from earlier sessions (mistake memory)
+    var focus: WeakSpot?
     var sentence = ""
     var isChecking = false
     var errorMessage: String?
@@ -44,6 +46,11 @@ class SentencePracticeViewModel {
         }
     }
 
+    func loadFocus() async {
+        guard focus == nil else { return }
+        focus = try? await APIClient.shared.fetchMistakes().weakSpots.first
+    }
+
     func check(context: String?) async {
         guard let round = currentRound else { return }
         let text = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -52,7 +59,10 @@ class SentencePracticeViewModel {
         isChecking = true
         errorMessage = nil
         do {
-            let result = try await APIClient.shared.checkSentence(words: round.words, sentence: text, context: context)
+            let result = try await APIClient.shared.checkSentence(
+                words: round.words, sentence: text, context: context,
+                focus: focus?.focusText, firstTry: firstTry
+            )
             rounds[currentIndex].result = result
             // Using a word in your own sentence is the strongest sign you know it —
             // count the first attempt of each round towards the word's streak.
@@ -101,6 +111,7 @@ struct SentencePracticeView: View {
         .navigationTitle("Build Sentences")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { viewModel.setUp(vocabulary: article.vocabulary ?? []) }
+        .task { await viewModel.loadFocus() }
     }
 
     // MARK: Round
@@ -113,6 +124,10 @@ struct SentencePracticeView: View {
 
         Text("Write one sentence that uses \(round.words.count == 1 ? "this word" : "both words"):")
             .font(.headline)
+
+        if let focus = viewModel.focus {
+            focusCard(focus)
+        }
 
         ForEach(round.words) { word in
             HStack(alignment: .firstTextBaseline) {
@@ -174,6 +189,23 @@ struct SentencePracticeView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    // MARK: Focus (mistake memory)
+
+    private func focusCard(_ spot: WeakSpot) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Watch out: \(spot.pattern)", systemImage: "scope")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.orange)
+            Text("Before: \(spot.example.wrote) → \(spot.example.correct). \(spot.example.why)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: Feedback
@@ -277,6 +309,12 @@ struct SentencePracticeView: View {
             Text("Every sentence you write yourself makes these words stick better than reading them.")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
+            if viewModel.rounds.contains(where: { !($0.result?.fixes.isEmpty ?? true) }) {
+                Text("Your corrections are saved in My Mistakes. Your next articles will practise them, and the next session starts with your most common one.")
+                    .font(.callout)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+            }
             Button("Done") { dismiss() }
                 .font(.headline)
                 .frame(maxWidth: .infinity)

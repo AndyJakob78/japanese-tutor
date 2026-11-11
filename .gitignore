@@ -25,3 +25,7 @@ DEPLOY.md
 
 # Local data backups (article text) — not for the public repo
 backups/
+
+# App Preview build files (rebuild with make_preview.py)
+AppStoreAssets/app-preview/out/tmp/
+AppStoreAssets/app-preview/clips/

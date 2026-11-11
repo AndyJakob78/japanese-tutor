@@ -25,6 +25,7 @@ const collections = {
   counters: firestore.collection('counters'), // For auto-incrementing IDs
   devices: firestore.collection('devices'),   // Per-device trial + Pro status
   mistakes: firestore.collection('mistakes'), // Sentence-building corrections (mistake memory)
+  speechCache: firestore.collection('speech_cache'), // Read-aloud MP3 per sentence (cloud voice)
 };
 
 // --- Auto-increment ID helper ---
