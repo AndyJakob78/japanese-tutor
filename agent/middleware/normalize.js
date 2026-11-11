@@ -583,14 +583,18 @@ function normalizeNumbers(text, writingSystem) {
   // Allow hyphens within the number word (e.g. "hyaku-rokujū-go") AND allow
   // a space OR hyphen between the number and the counter ("60 kiroguramu").
   const re = new RegExp(
-    `(?<![a-zāīūēō0-9])([a-zāīūēō][a-zāīūēō-]*?)[\\s-]?(${counterGroup})(?![a-zāīūēō])`,
+    `(?<![a-zāīūēō0-9])([a-zāīūēō][a-zāīūēō-]*?)([\\s-]?)(${counterGroup})(?![a-zāīūēō])`,
     'gi'
   );
-  return text.replace(re, (match, numWord, counter) => {
+  return text.replace(re, (match, numWord, sep, counter) => {
     // A lone "shi" is 4 only in shigatsu (April); with every other counter 4
     // is yo-/yon-. Otherwise real words break: shiji 支持 → "4-ji" (#164),
     // shien 支援 → "4-en" (#152).
     if (numWord.toLowerCase() === 'shi' && counter.toLowerCase() !== 'gatsu') return match;
+    // "ni" / "yo" followed by a SPACE are the particles, not 2 / 4:
+    // "suki na yō ni jikan wo tsukau" became "yō 2-jikan" (#211, 2026-11-11).
+    // Glued or hyphenated forms (nijikan, ni-nen) are still numbers.
+    if (/\s/.test(sep) && ['ni', 'yo'].includes(numWord.toLowerCase())) return match;
     const n = parseSpelledNumber(numWord);
     if (n === null || n < 1 || n > 999) return match;
     if (writingSystem === 'kanji') {
