@@ -22,3 +22,6 @@ build/
 # Operational notes with the owner's device ID (= account access, no auth) — public repo
 KNOWLEDGE_HUB.md
 DEPLOY.md
+
+# Local data backups (article text) — not for the public repo
+backups/

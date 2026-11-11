@@ -21,6 +21,39 @@ const wanakana = require('wanakana');
 // Unicode ranges
 const KANJI_AND_REPEAT = /[一-鿿々]+/;
 
+// Katakana for foreign sounds that wanakana spells wrong (2026-11-11, #211
+// "vyira"): ヴィ→vyi, ヴァ→vua, ティ→tei, ディ→dei, ファ→fua, フィ→fyi,
+// ウィ→ui… Hepburn writes va/vi/ti/di/fa/fi/wi. Replaced with romaji before
+// wanakana runs (it passes ASCII through); a following ー becomes a macron.
+const FOREIGN_SOUNDS = {
+  'ヴァ': 'va', 'ヴィ': 'vi', 'ヴェ': 've', 'ヴォ': 'vo', 'ヴュ': 'vyu', 'ヴ': 'vu',
+  'ウィ': 'wi', 'ウェ': 'we', 'ウォ': 'wo',
+  'ティ': 'ti', 'ディ': 'di', 'トゥ': 'tu', 'ドゥ': 'du', 'テュ': 'tyu', 'デュ': 'dyu',
+  'ファ': 'fa', 'フィ': 'fi', 'フェ': 'fe', 'フォ': 'fo', 'フュ': 'fyu',
+  'ツァ': 'tsa', 'ツィ': 'tsi', 'ツェ': 'tse', 'ツォ': 'tso',
+  'クァ': 'kwa', 'グァ': 'gwa', 'イェ': 'ye', 'シェ': 'she', 'ジェ': 'je', 'チェ': 'che',
+};
+const MACRON = { a: 'ā', i: 'ī', u: 'ū', e: 'ē', o: 'ō' };
+const FOREIGN_RE = new RegExp(`(${Object.keys(FOREIGN_SOUNDS).sort((a, b) => b.length - a.length).join('|')})(ー?)`, 'g');
+
+/**
+ * Replace foreign-sound katakana with Hepburn romaji (ヴィラ → "viラ", パーティー → "パーtī"),
+ * then every remaining katakana + ー with its romaji and a macron (ニー → "nī";
+ * wanakana writes "nii", so ディズニーランド came out "dizuniirando").
+ */
+function romanizeForeignSounds(text) {
+  return String(text || '')
+    .replace(FOREIGN_RE, (m, kana, long) => {
+      const r = FOREIGN_SOUNDS[kana];
+      return long ? r.slice(0, -1) + MACRON[r.slice(-1)] : r;
+    })
+    .replace(/([ァ-ヺ][ァィゥェォャュョ]?)ー/g, (m, kana) => {
+      const r = wanakana.toRomaji(kana);
+      const v = r.slice(-1);
+      return MACRON[v] ? r.slice(0, -1) + MACRON[v] : m;
+    });
+}
+
 /**
  * Apply Hepburn long-vowel macronization to a romaji string from wanakana.
  * Wanakana outputs "ou"/"oo"/"uu"/"aa"/"ee" where Hepburn uses macron form.
@@ -188,6 +221,23 @@ function convertKanjiFuriganaToRomaji(text) {
   //   mis-split okurigana (e.g. しい技術 — い is not in this list, stays joined).
   out = out.replace(/([はがをにでとものへや])([一-鿿々]+（)/g, '$1 $2');
 
+  // (e3) Script boundaries are word boundaries (2026-11-11, #211):
+  //     ・ between katakana words → space (プリンス・ホテル → "purinsu hoteru")
+  //     hiragana → katakana: 新（あたら）しいヴィラ → "atarashii vira", はプリンス → "wa purinsu"
+  //     katakana → kanji:    リゾート軽井沢（ → "rizōto karuizawa"
+  //     katakana → hiragana: スタートします → "sutāto shimasu" (ー stays with its katakana)
+  out = out.replace(/・/g, ' ');
+  out = out.replace(/([ぁ-ゖ])([ァ-ヺ])/g, '$1 $2');
+  out = out.replace(/([ァ-ヺー])([一-鿿々])/g, '$1 $2');
+  out = out.replace(/([ァ-ヺー])([ぁ-ゖ])/g, '$1 $2');
+
+  // (e4) ような / ように are "yō na" / "yō ni" (#211 "ie no yōna heya", #203):
+  //     の+よう splits, よう+な/に splits, and a space follows before the next word.
+  out = out.replace(/のよう(?=[なに])/g, 'の よう');
+  out = out.replace(/([き）])なよう(?=[なに])/g, '$1 な よう');   // 好（す）きなように → "suki na yō ni"
+  out = out.replace(/よう([なに])(?=[ぁ-ゖァ-ヺ一-鿿々])/g, 'よう $1 ');
+  out = out.replace(/よう([なに])(?![ぁ-ゖ])/g, 'よう $1');
+
   // (f) Particle after a LONG hiragana run (3+ chars to avoid false positives
   //     on 2-char words like なに, おに, あに). Catches cases like:
   //     ありがとう を → covered, ところに → covered.
@@ -207,8 +257,9 @@ function convertKanjiFuriganaToRomaji(text) {
   out = out.replace(/へ(?=[\s。、！？]|$)/g, 'え');
 
   // Step 2: Convert remaining kana to romaji. wanakana preserves ASCII,
-  // markers like [NEW], digits, and punctuation as-is.
-  out = wanakana.toRomaji(out);
+  // markers like [NEW], digits, and punctuation as-is. Foreign sounds first
+  // (wanakana spells ヴィ "vyi", ティ "tei" …).
+  out = wanakana.toRomaji(romanizeForeignSounds(out));
 
   // Step 3: Hepburn macronization (long vowels).
   out = applyHepburnMacrons(out);
@@ -379,5 +430,6 @@ module.exports = {
   convertKanjiFuriganaToRomaji,
   convertKanjiFuriganaToKana,
   splitLongSentences,
+  romanizeForeignSounds,
   _internals: { applyHepburnMacrons, joinSplitOkurigana },
 };

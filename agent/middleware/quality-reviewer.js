@@ -17,7 +17,7 @@
 // - Returns fixes_made[] so we have telemetry on what's being caught
 //   (stored on article doc as `reviewer_fixes` for future analysis)
 
-const { callClaudeJSON } = require('../../server/services/claude');
+const { callClaude, callClaudeJSON } = require('../../server/services/claude');
 const { buildNumberCheatSheet } = require('./numbers-formatter');
 
 function buildReviewerSystemPrompt(writingSystem) {
@@ -443,6 +443,10 @@ For EACH non-grammatical word in the article body, verify:
 These checks cost you nothing and catch real errors. Run them BEFORE returning your JSON.
 
 ═══════════════════════════════════════════════════════════════════════
+## Keep the English translation in sync
+The learner reads translation_en next to the article. If you remove, add, split, merge or change the meaning of ANY sentence, return translation_en updated to match the corrected body sentence for sentence (same paragraphs). Never leave a sentence in translation_en that is no longer in the body (#211: three removed sentences stayed in the English). Pure spelling/spacing fixes don't need a translation change — then return translation_en unchanged.
+
+═══════════════════════════════════════════════════════════════════════
 ## What NOT to change
 - Article length (keep within ±10% words)
 - [NEW] and [REVIEW] markers — preserve EXACT positions
@@ -458,6 +462,7 @@ Respond with ONLY valid JSON (no markdown fences, no commentary):
   "title_romaji": "corrected title (or unchanged)",
   "summary_romaji": "corrected summary (or unchanged)",
   "body_romaji": "corrected body, markers preserved",
+  "translation_en": "English translation matching the corrected body (unchanged if no sentence changed)",
   "newWords_fixes": [
     {"index": 0, "field": "word_romaji_macron", "from": "kaishū", "to": "baishū"}
   ],
@@ -525,6 +530,9 @@ ${article.summary_romaji}
 body_romaji:
 ${article.body_romaji}
 
+translation_en:
+${article.translation_en || '(none)'}
+
 ## Current vocabulary (newWords array)
 ${newWordsForReview || '(none)'}
 
@@ -546,6 +554,7 @@ Specific checks for THIS article:
 9. **News register**: "ijō" not "yori mo ōku" for numeric thresholds.
 10. **Corporate verbs** (cat. 16, within JLPT budget): "kangaete imasu" over "omotte imasu" for corp stances; "sōgyō shita" over "dekita" for company founding (if sōgyō can be a [NEW] word); "kigyō-muke" over "kigyō yō".
 11. **Tokenization**: passive te-forms joined (tsukawarete, not tsukaware te).
+12. **Natural word combinations**: does every verb fit its object? A word-by-word translation can be grammatical but meaningless: "shokuji ya yasumu jikan wo tasukemasu" (helps meals and rest time, #211) → "shokuji wo yōi shimasu" / "yukkuri yasumeru yō ni tetsudaimasu". Fix only clear mismatches, with words at or below the user's level, and update translation_en if the meaning changes.
 
 Return the corrected article. If nothing needs fixing, return it unchanged with fixes_made: [].`;
 
@@ -560,7 +569,10 @@ Return the corrected article. If nothing needs fixing, return it unchanged with 
     // field on parse failure.
     if (result.title_romaji)   article.title_romaji   = result.title_romaji;
     if (result.summary_romaji) article.summary_romaji = result.summary_romaji;
+    const bodyBefore = article.body_romaji || '';
+    const translationBefore = article.translation_en || '';
     if (result.body_romaji)    article.body_romaji    = result.body_romaji;
+    if (result.translation_en) article.translation_en = result.translation_en;
 
     if (Array.isArray(result.newWords_fixes) && article.newWords) {
       for (const fix of result.newWords_fixes) {
@@ -579,6 +591,18 @@ Return the corrected article. If nothing needs fixing, return it unchanged with 
       console.log('[Reviewer] No fixes needed — article passed quality review.');
     }
 
+    // Safety net: sentences were added/removed but the translation came back
+    // unchanged → translate the corrected body again (2026-11-11; 29 of 128
+    // articles had a stale translation before this).
+    if (translationBefore && article.translation_en === translationBefore
+        && sentenceCount(article.body_romaji) !== sentenceCount(bodyBefore)) {
+      const fresh = await translateBody(article.body_romaji);
+      if (fresh) {
+        article.translation_en = fresh;
+        fixesMade.push('Re-translated: sentences changed but the translation was not updated');
+      }
+    }
+
     return { article, fixesMade };
   } catch (err) {
     console.error('[Reviewer] Pass failed — keeping article as-is:', err.message);
@@ -586,6 +610,35 @@ Return the corrected article. If nothing needs fixing, return it unchanged with 
   }
 }
 
+function sentenceCount(text) {
+  return String(text || '').split(/[.!?。！？]+/).filter(s => s.trim()).length;
+}
+
+/**
+ * English translation of a romaji article body, sentence for sentence.
+ * Used when the reviewer changed sentences without updating translation_en,
+ * and to repair stored articles whose translation no longer matches.
+ */
+async function translateBody(bodyRomaji) {
+  const body = String(bodyRomaji || '').replace(/\[(NEW|REVIEW)\]\s*/g, '').trim();
+  if (!body) return null;
+  try {
+    const text = await callClaude(
+      `You translate a short Japanese news article, written in Hepburn romaji, into plain English for a learner.
+Translate sentence for sentence: same order, one English sentence per Japanese sentence, same paragraph breaks. Add nothing that is not in the Japanese and leave nothing out. Keep names as they are spelled in English (Karuizawa, Prince Hotels).
+Respond with ONLY the translation.`,
+      body,
+      { effort: 'low' }
+    );
+    return text.trim() || null;
+  } catch (err) {
+    console.error('[Reviewer] Re-translation failed — keeping old translation:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   runQualityReviewer,
+  translateBody,
+  _internals: { sentenceCount },
 };

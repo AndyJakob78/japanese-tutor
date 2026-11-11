@@ -15,6 +15,7 @@ const { normalizeBody, normalizeWord } = require('./middleware/normalize');
 const { runQualityReviewer } = require('./middleware/quality-reviewer');
 const { autoFixHallucinatedRomaji } = require('./middleware/wanakana-fix');
 const { convertScript, splitLongSentences } = require('./middleware/script-converter');
+const { applyProperNouns } = require('./middleware/proper-nouns');
 const { buildNumberCheatSheet } = require('./middleware/numbers-formatter');
 const { correctVocabLevels, lookupLevel } = require('./middleware/jlpt-levels');
 const { findGiveaways, countProblems, describeProblems } = require('./middleware/quiz-check');
@@ -607,7 +608,7 @@ HOMOPHONE DISAMBIGUATION — choose the right kanji based on context:
 - bunka → 文化 (culture — sociology) vs 分科 (subcommittee — corporate/project context); if neither fits a business context, double-check whether 分類 (bunrui — category) was intended
 - jōkyō (状況 — status, for progress reports) vs jōken (条件 — requirements, for contracts/specs) — pick by intent
 Always pick the kanji that matches the surrounding semantic context of the news story.`,
-      userRules: `Kanji + furigana in full-width parentheses — NO romaji in title, summary, or body. Use kanji at or below ${config.proficiency_level} level. Add spaces between phrases. Max ${config.max_sentence_length} words per sentence. Exactly ${config.new_words_per_article} [NEW] words. Level: ${config.proficiency_level}. Include 1-2 grammar points. Also extract full vocabulary metadata for each [NEW] and [REVIEW] word.`,
+      userRules: `Kanji + furigana in full-width parentheses — NO romaji in title, summary, or body. Use kanji at or below ${config.proficiency_level} level. Add spaces between phrases. Separate the words inside katakana compound names with ・ (プリンス・グランド・リゾート, ヴィラ・プリンス) — the romaji reader sees them as separate words. List every proper noun (people, places, companies, brands, products, events) in "proper_nouns" with its Hepburn romaji: capital letters, spaces between words, macrons (軽井沢 → Karuizawa, 長野県 → Nagano-ken, プリンス・グランド・リゾート → Purinsu Gurando Rizōto). Max ${config.max_sentence_length} words per sentence. Exactly ${config.new_words_per_article} [NEW] words. Level: ${config.proficiency_level}. Include 1-2 grammar points. Also extract full vocabulary metadata for each [NEW] and [REVIEW] word.`,
     };
   } else {
     // Default: romaji
@@ -1085,6 +1086,7 @@ Respond with ONLY JSON:
   "body_romaji": "article with [NEW] and [REVIEW] markers in ${writingSystem === 'romaji' ? 'romaji' : writingSystem === 'kana' ? 'kana' : 'kanji+furigana'}",
   "translation_en": "English translation",
   "grammar_points": [{"pattern":"...","level":"N3","explanation":"...","examples":["..."]}],
+  "proper_nouns": [{"ja":"軽井沢","romaji":"Karuizawa"}],
   "sources_cited": ["source 1"],
   "word_count": 200,
   "new_word_count": 12,
@@ -1232,6 +1234,9 @@ Rules: ${wsPrompt.userRules}`;
     if (result.title_romaji)   result.title_romaji   = normalizeBody(result.title_romaji,   userWritingSystem);
     if (result.summary_romaji) result.summary_romaji = normalizeBody(result.summary_romaji, userWritingSystem);
 
+    // Names: capitals and spacing from the draft's proper_nouns list (see proper-nouns.js)
+    if (userWritingSystem === 'romaji') applyNames(result);
+
     // Deterministically split over-long sentences at clean clause boundaries
     // (comma / te-form). Replaces the old futile "retry with a new topic when
     // sentences are too long" logic, which tripled pipeline time and caused
@@ -1316,6 +1321,7 @@ Rules: ${wsPrompt.userRules}`;
     if (result.body_romaji)    result.body_romaji    = normalizeBody(result.body_romaji,    postWritingSystem);
     if (result.title_romaji)   result.title_romaji   = normalizeBody(result.title_romaji,   postWritingSystem);
     if (result.summary_romaji) result.summary_romaji = normalizeBody(result.summary_romaji, postWritingSystem);
+    applyNames(result);   // the reviewer may have lowercased or re-glued a name
   }
 
   // Title and summary must never carry markers. The early summary strip isn't
@@ -1340,6 +1346,14 @@ Rules: ${wsPrompt.userRules}`;
   console.log(`[Step 3+4] Article (${postWritingSystem}): "${result.title_romaji}"`);
   console.log(`[Step 3+4] Words: ${result.word_count}, New: ${result.newWords?.length || 0}, Review: ${result.reviewWords?.length || 0}`);
   return result;
+}
+
+function applyNames(result) {
+  const names = Array.isArray(result.proper_nouns) ? result.proper_nouns : [];
+  if (names.length === 0) return;
+  for (const f of ['title_romaji', 'summary_romaji', 'body_romaji']) {
+    if (result[f]) result[f] = applyProperNouns(result[f], names);
+  }
 }
 
 // =============================================

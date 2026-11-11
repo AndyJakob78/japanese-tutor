@@ -7,7 +7,8 @@
     "start": "node server/index.js",
     "seed": "node database/seed.js",
     "test-claude": "node test/test-claude.js",
-    "test-pipeline": "node test/test-pipeline.js"
+    "test-pipeline": "node test/test-pipeline.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

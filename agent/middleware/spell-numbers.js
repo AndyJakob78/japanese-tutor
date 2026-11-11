@@ -193,13 +193,27 @@ const { romanizeGrammarPoint } = require('./grammar-romaji');
 const QUIZ_FIELDS = ['question_romaji', 'correct_answer', 'hint', 'explanation'];
 
 /**
+ * Spelling fixes for articles stored before the converter was fixed
+ * (2026-11-11, #211): wanakana's "vyira"/"vua" → vira/va, and glued
+ * "yōna"/"yōni"/"noyōna" → "yō na"/"yō ni"/"no yō na". Native Hepburn has
+ * no "v", so vy-/vu+vowel only ever came from ヴ.
+ */
+function fixStoredSpelling(text) {
+  if (!text || typeof text !== 'string') return text;
+  return text
+    .replace(/([Vv])y([aieo])/g, '$1$2')
+    .replace(/([Vv])u([aeo])/g, '$1$2')
+    .replace(/(^|[^A-Za-zāīūēō])(no)?yō(na|ni)(?![A-Za-zāīūēō])/g, (m, pre, no, end) => `${pre}${no ? 'no ' : ''}yō ${end}`);
+}
+
+/**
  * Spell out numbers in an article object (and its quiz/vocab context) for a
  * romaji reader. Returns a new object; kana/kanji articles are untouched.
  */
 function spellOutArticle(article) {
   if (!article || (article.writing_system && article.writing_system !== 'romaji')) return article;
   const out = { ...article };
-  for (const f of ['title_romaji', 'summary_romaji', 'body_romaji']) out[f] = spellOutNumbers(out[f]);
+  for (const f of ['title_romaji', 'summary_romaji', 'body_romaji']) out[f] = spellOutNumbers(fixStoredSpelling(out[f]));
   // Grammar points come from the kanji-first draft (see grammar-romaji.js)
   if (Array.isArray(out.grammar_points)) out.grammar_points = out.grammar_points.map(romanizeGrammarPoint);
   if (Array.isArray(out.quiz_questions)) {
@@ -220,4 +234,4 @@ function spellOutQuestion(q) {
   return c;
 }
 
-module.exports = { spellOutNumbers, spellOutArticle, spellOutQuestion, _internals: { readNumber, readWithCounter } };
+module.exports = { spellOutNumbers, spellOutArticle, spellOutQuestion, _internals: { readNumber, readWithCounter, fixStoredSpelling } };
