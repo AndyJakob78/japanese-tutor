@@ -134,11 +134,18 @@ function lookupLevel(entry) {
   if (stem && stem !== kanji && KANJI_TO_LEVEL[stem]) return KANJI_TO_LEVEL[stem];
   if (kanji && /[一-鿿]/.test(kanji)) {
     const full = FULL_KANJI_TO_LEVEL[kanji] || (stem && stem !== kanji && FULL_KANJI_TO_LEVEL[stem]) || null;
-    // Same first kanji + same reading at an easier level (下がる = 下る さがる, N4)
     const kana = (entry.word_kana || '').trim();
+    // Same first kanji + same reading (下がる = 下る さがる, N4)
     const variant = /^[一-鿿]/.test(kanji) && kana ? FIRST_KANJI_READING_TO_LEVEL[`${kanji[0]}|${kana}`] : null;
-    if (full && variant) return LEVEL_ORDER.indexOf(variant) < LEVEL_ORDER.indexOf(full) ? variant : full;
-    return full || variant || null;
+    // The list writes some everyday words only in kana (できる N5, たくさん N5); their kanji
+    // spelling is missing or listed at a rare level. Without this, 出来る matched 出切る (N1)
+    // through the variant map (2026-11-11). The kana map holds only kana-written words, so
+    // homophones written in kanji (にんき 人気 / 任期) still don't resolve by reading.
+    const kanaOnly = kana ? FULL_KANA_TO_LEVEL[kana] || null : null;
+    // When the list knows the exact spelling, the variant map is only a tiebreak toward easier levels;
+    // when it doesn't, prefer the kana entry over a different word that shares the first kanji.
+    const candidates = full ? [full, variant, kanaOnly] : kanaOnly ? [kanaOnly] : [variant];
+    return candidates.filter(Boolean).sort((x, y) => LEVEL_ORDER.indexOf(x) - LEVEL_ORDER.indexOf(y))[0] || null;
   }
   const kana = (entry.word_kana || kanji || '').trim();
   return FULL_KANA_TO_LEVEL[kana] || null;
