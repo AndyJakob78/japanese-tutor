@@ -29,3 +29,4 @@ backups/
 # App Preview build files (rebuild with make_preview.py)
 AppStoreAssets/app-preview/out/tmp/
 AppStoreAssets/app-preview/clips/
+AppStoreAssets/upload-1.4/
