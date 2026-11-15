@@ -447,8 +447,16 @@ These checks cost you nothing and catch real errors. Run them BEFORE returning y
 The learner reads translation_en next to the article. If you remove, add, split, merge or change the meaning of ANY sentence, return translation_en updated to match the corrected body sentence for sentence (same paragraphs). Never leave a sentence in translation_en that is no longer in the body (#211: three removed sentences stayed in the English). Pure spelling/spacing fixes don't need a translation change — then return translation_en unchanged.
 
 ═══════════════════════════════════════════════════════════════════════
+## ✂️ UNSUPPORTED CONTENT — DELETE IT (deleting is not inventing)
+Check every sentence of translation_en against the source news. DELETE a body sentence (and its translation) when it is:
+- a quote ('...' to iimashita) that is not among the source quotes or key facts, or is given to a different person than the source names (#214: Putin "explained" a decree the source says came with NO reason; the minister's statement was given to the wrong minister);
+- a scene, feeling or opinion the source doesn't report ("people open the factory door in the morning", "Japan is very worried", "It is important work");
+- a prediction stated as fact ("relations will get worse") the source doesn't make.
+If a sentence is half true, cut it back to the true half using only words already in the article — do not write new content. Never delete a sentence that holds a [NEW] word unless it is false; if you must, keep the word's other uses intact. Each deletion goes in fixes_made as "Removed unsupported: ...".
+
+═══════════════════════════════════════════════════════════════════════
 ## What NOT to change
-- Article length (keep within ±10% words)
+- Article length (keep within ±10% words) — EXCEPT deleting unsupported sentences (above); a shorter true article is the goal
 - [NEW] and [REVIEW] markers — preserve EXACT positions
 - Vocabulary word_kana / word_kanji fields — those came from a strong source
 - Topic, storyline, structure
@@ -555,6 +563,8 @@ Specific checks for THIS article:
 10. **Corporate verbs** (cat. 16, within JLPT budget): "kangaete imasu" over "omotte imasu" for corp stances; "sōgyō shita" over "dekita" for company founding (if sōgyō can be a [NEW] word); "kigyō-muke" over "kigyō yō".
 11. **Tokenization**: passive te-forms joined (tsukawarete, not tsukaware te).
 12. **Natural word combinations**: does every verb fit its object? A word-by-word translation can be grammatical but meaningless: "shokuji ya yasumu jikan wo tasukemasu" (helps meals and rest time, #211) → "shokuji wo yōi shimasu" / "yukkuri yasumeru yō ni tetsudaimasu". Fix only clear mismatches, with words at or below the user's level, and update translation_en if the meaning changes.
+
+13. **Source check** (✂️ section): read translation_en sentence by sentence against the source news. Delete every quote, scene, opinion or prediction the source doesn't support, and update translation_en to match.
 
 Return the corrected article. If nothing needs fixing, return it unchanged with fixes_made: [].`;
 

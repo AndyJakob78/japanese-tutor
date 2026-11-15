@@ -208,6 +208,11 @@ function fixStoredSpelling(text) {
     .replace(/([A-Za-zāīūēō]+)\s?\(([^)]{1,40})\)/g, (m, word, inner) => (foldLetters(inner) === foldLetters(word) ? word : m))
     // "9%(pāsento)": the % is read as pāsento anyway
     .replace(/%\s?\(\s?p[aā]-?\s?sento\s?\)/gi, '%')
+    // particle へ + no/wa/mo romanized as "heno": "rūru heno kotae" → "rūru e no kotae"
+    .replace(/(^|[^A-Za-zāīūēō])he(no|wa|mo)(?![A-Za-zāīūēō])/g, '$1e $2')
+    // honorific glued to a name: "Akazawasan" → "Akazawa-san" (not shisan, otōsan …)
+    .replace(/(^|[^A-Za-zāīūēō-])([A-Z][a-zāīūēō]{2,}?)(san|sama|kun|chan)(?![A-Za-zāīūēō])/g,
+      (m, pre, name, hon) => (SAN_WORDS.has((name + hon).toLowerCase()) ? m : `${pre}${name}-${hon}`))
     .replace(/([Vv])y([aieo])/g, '$1$2')
     .replace(/([Vv])u([aeo])/g, '$1$2')
     .replace(/(^|[^A-Za-zāīūēō])(no)?yō(na|ni)(?![A-Za-zāīūēō])/g, (m, pre, no, end) => `${pre}${no ? 'no ' : ''}yō ${end}`)
@@ -222,6 +227,11 @@ const NA_ADJECTIVES = ['iroiro', 'kirei', 'suteki', 'hima', 'dame', 'genki', 'da
   'shizuka', 'nigiyaka', 'taisetsu', 'benri', 'fuben', 'tokubetsu', 'yūmei', 'shinsetsu', 'majime', 'suki', 'kirai',
   'azayaka', 'yutaka', 'tashika', 'hitsuyō', 'anzen', 'kiken', 'jiyū', 'fushigi'];
 const NA_ADJ_GLUED = new RegExp(`(^|[^A-Za-zāīūēō])(${NA_ADJECTIVES.join('|')})na(?![A-Za-zāīūēō])`, 'gi');
+// Ordinary words that end in san/sama/kun — capitalised only at a sentence start.
+const SAN_WORDS = new Set(['okāsan', 'otōsan', 'onīsan', 'onēsan', 'ojīsan', 'obāsan', 'ojisan', 'obasan', 'okusan', 'minasan',
+  'akachan', 'shisan', 'zaisan', 'seisan', 'kessan', 'yosan', 'hasan', 'tōsan', 'kōsan', 'tasan', 'shussan', 'kansan',
+  'keisan', 'tsūsan', 'nōsan', 'suisan', 'kōzan', 'kazan', 'tokusan', 'miyagesan', 'gochisōsama', 'otsukaresama',
+  'okagesama', 'kamisama', 'hotokesama', 'ohisama', 'tsukisama', 'sakasama', 'samasama', 'kunkun', 'meisan', 'jisan', 'kasan']);
 const NATIVE_TSU = { ichi: 'hitotsu', ni: 'futatsu', san: 'mittsu', yon: 'yottsu', go: 'itsutsu', roku: 'muttsu', hachi: 'yattsu', kyū: 'kokonotsu' };
 const matchCase = (word, like) => (like[0] === like[0].toUpperCase() ? word[0].toUpperCase() + word.slice(1) : word);
 

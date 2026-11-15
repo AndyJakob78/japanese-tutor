@@ -141,6 +141,19 @@ test('read-aloud: sentences and hiragana for the voice', () => {
   assert.equal(toSpeechKana('Fukui-ken no shinbun wo yomimasu.'), 'ふくい けん の しんぶん を よみます。');
 });
 
+test('particle e no and name-san (#214 JTI article)', () => {
+  assert.equal(romaji('西（にし）の国（くに）のルール への 答（こた）え です。'), 'Nishi no kuni no rūru e no kotae desu.');
+  assert.equal(romaji('日本（にほん）へは 行（い）きません。'), 'Nihon e wa ikimasen.');
+  assert.equal(romaji('学校（がっこう）へ 行（い）きます。'), 'Gakkō e ikimasu.');
+  assert.equal(romaji('赤沢（あかざわ）さん は 言（い）いました。'), 'Akazawa-san wa iimashita.');
+  assert.equal(romaji('お父（とう）さん は 元気（げんき）です。'), 'Otōsan wa genki desu.');
+  assert.equal(fixStoredSpelling("'kore wa nishi no kuni no rūru heno kotae desu'"), "'kore wa nishi no kuni no rūru e no kotae desu'");
+  assert.equal(fixStoredSpelling('hantai shimashita. Akazawasan wa'), 'hantai shimashita. Akazawa-san wa');
+  assert.equal(fixStoredSpelling('Shisan wa ōkii. Otōsan to Fujisan'), 'Shisan wa ōkii. Otōsan to Fuji-san');
+  assert.equal(fixStoredSpelling('Akazawa-san to Tanaka-san'), 'Akazawa-san to Tanaka-san');
+  assert.equal(fixStoredSpelling('henohen'), 'henohen');
+});
+
 test('katakana reading in brackets is not shown or read twice', () => {
   assert.equal(romaji('約（やく）9パーセント（ぱーせんと）上（あ）がりました。').includes('('), false);
   assert.equal(romaji('約（やく）9%（パーセント）です。').includes('('), false);
@@ -148,4 +161,22 @@ test('katakana reading in brackets is not shown or read twice', () => {
   assert.equal(fixStoredSpelling('pāsento (pa- sento)'), 'pāsento');
   assert.equal(spellOutNumbers(fixStoredSpelling('yaku 9%(pāsento) agarimashita')), 'Yaku kyū pāsento agarimashita');
   assert.equal(fixStoredSpelling('Nihon (Japan) desu'), 'Nihon (Japan) desu');     // a real explanation stays
+});
+
+test('reviewer deletions drop their vocab, review list skips too-hard words (#214)', () => {
+  const { _internals: { pruneVocabAfterReview, selectReviewWords } } = require('../agent/pipeline');
+  const before = "Roshia ni [NEW] kōjō ga arimasu. Akazawa-san wa 'kaisha wo [NEW] mamoru shigoto wo [NEW] tsuzukemasu' to iimashita. Nihon to Roshia no [NEW] kankei wa waruku narimasu. Totemo [NEW] shinpai shite imasu.";
+  const after = 'Roshia ni [NEW] kōjō ga arimasu. Totemo [NEW] shinpai shite imasu.';
+  const words = ['kōjō', 'mamoru', 'tsuzukeru', 'kankei', 'shinpai', 'gaikō'].map(w => ({ word_romaji_macron: w }));
+  const { kept, dropped } = pruneVocabAfterReview(before, after, words, 'NEW');
+  assert.deepEqual(dropped, ['mamoru', 'tsuzukeru', 'kankei']);
+  assert.deepEqual(kept.map(w => w.word_romaji_macron), ['kōjō', 'shinpai', 'gaikō']);   // never marked → kept
+
+  const vocab = [
+    { word_romaji_macron: 'baikyaku', word_kanji: '売却', meaning_en: 'sale', status: 'learning', jlpt_level: 'N4' },
+    { word_romaji_macron: 'shoyū', word_kanji: '所有', meaning_en: 'ownership', status: 'learning', jlpt_level: 'N4' },
+    { word_romaji_macron: 'junbi', word_kanji: '準備', meaning_en: 'preparation', status: 'learning', jlpt_level: 'N4' },
+    { word_romaji_macron: 'terebi', word_kanji: '', meaning_en: 'TV', status: 'learning', jlpt_level: 'N5' },
+  ];
+  assert.deepEqual(selectReviewWords(vocab, 'N4').map(s => s.split(' ')[0]), ['junbi', 'terebi']);
 });

@@ -95,7 +95,7 @@ function weakSpotsPrompt(weakSpots) {
   const lines = spots.map(s => `- ${s.type_label}: ${s.pattern} — e.g. the student wrote "${s.example.wrote}", correct is "${s.example.correct}" (${s.example.why})`);
   return `## The student's weak spots (from sentences they wrote themselves)
 ${lines.join('\n')}
-Use each of these patterns correctly at least once in the body, in a natural sentence. If one fits the story, make one of the grammar_points about it, with an example that shows the correct form.`;
+Where a pattern fits a sentence the story needs anyway, use it correctly there. NEVER add a sentence, scene, opinion or detail just to practise a pattern — the news facts always win (e.g. no "people open the factory door in the morning" to practise akeru). A pattern that doesn't fit the story goes into one grammar_point instead, with its own example sentence that shows the correct form. One grammar_point covers ONE pattern.`;
 }
 
 module.exports = { TYPES, TYPE_LABELS, patternKey, saveMistakes, loadMistakes, summarizeWeakSpots, weakSpotsPrompt };

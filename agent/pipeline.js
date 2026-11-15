@@ -798,6 +798,9 @@ You will be given source news facts in the user prompt. Your article MUST stay f
 - Do NOT misstate company nationality, product purpose, or factual claims.
 - If the source says a company is making a chip IN Germany but it's not a German company, write that carefully — "X-company ga Doitsu de tsukurimashita" (made it in Germany) NOT "Doitsu no X-company" (German X-company).
 - If unsure, REWORD to avoid the claim rather than guess.
+- QUOTES ('...' to iimashita): only statements the source facts actually report, said by the person the source names (with the right role, e.g. "Katayama zaimu daijin", not a different minister). If the source says someone gave no reason, do NOT give them one. Never put words in a leader's mouth.
+- No invented scenes, feelings or predictions: no "people open the door in the morning", no "Nihon wa totemo shinpai shite imasu" unless the source says so, no "relations WILL get worse" — report what happened.
+- Never swap in a simpler word that changes the meaning (sanctions are not "rūru"). If the exact word is above the level, say what it means in simple words (sanctions → "Roshia ni kibishii koto wo shita").
 
 ## CRITICAL: Watch for Phonetic-Slip Real Words
 
@@ -964,7 +967,7 @@ For corporate actions and stances, prefer these N4–N5 verb choices that sound 
 Stick to the N4–N5–N3 swaps above. If the news story would normally use an N2 word, REWORD to stay within scope.
 
 ## CRITICAL: Word Count
-The article body MUST contain EXACTLY ${config.target_word_count || 200} ${writingSystem === 'romaji' ? 'words' : 'Japanese characters'} — no more, no less (±10% tolerance only).
+Aim for ${config.target_word_count || 200} ${writingSystem === 'romaji' ? 'words' : 'Japanese characters'} (±10%) — but the target is a MAXIMUM, never a reason to pad. When the source facts run out, stop: a shorter true article beats a longer one with filler. NEVER fill length with invented scenes, opinions, feelings, predictions or "It is important work"-type comments (#214 added "people open the factory door in the morning" to reach the count).
 IMPORTANT: [NEW] and [REVIEW] markers do NOT count as words. Count only the actual content words in the body.
 After writing, count your words carefully and adjust before responding.
 The "word_count" field must equal the actual content word count (excluding markers).
@@ -1096,7 +1099,7 @@ Respond with ONLY JSON:
 }`;
 
   const userPrompt = `Write a Japanese learning article about: ${newsData.topic} (${newsData.region})
-TARGET LENGTH: ${config.target_word_count || 200} content words in the body (do NOT count [NEW] or [REVIEW] markers — count only actual words).
+TARGET LENGTH: up to ${config.target_word_count || 200} content words in the body (do NOT count [NEW] or [REVIEW] markers — count only actual words). Shorter is fine when the source has fewer facts — never pad.
 
 IMPORTANT: This article is for a ${config.proficiency_level} level student. Follow the three-tier vocabulary stratification in the system prompt:
 - Background = ${isN5User ? 'N5' : `${easierLevels} ONLY (one tier below ${config.proficiency_level})`}
@@ -1312,8 +1315,18 @@ Rules: ${wsPrompt.userRules}`;
   // phonetic-slip real words (sekkai→sekai), gibberish phrases, and factual
   // drift from the source. See agent/middleware/quality-reviewer.js and
   // KNOWLEDGE_HUB.md "Quality Framework" section.
+  const bodyBeforeReview = result.body_romaji || '';
   const { article: reviewed, fixesMade } = await runQualityReviewer(result, newsData, config);
   result = reviewed;
+  // The reviewer may delete unsupported sentences; their [NEW]/[REVIEW] words
+  // must not be saved or quizzed (#214 dry run: mamoru, kankei went with them).
+  for (const [key, tag] of [['newWords', 'NEW'], ['reviewWords', 'REVIEW']]) {
+    const { kept, dropped } = pruneVocabAfterReview(bodyBeforeReview, result.body_romaji, result[key], tag);
+    if (dropped.length) {
+      result[key] = kept;
+      console.log(`[Reviewer] Dropped ${tag} word(s) whose sentence was removed: ${dropped.join(', ')}`);
+    }
+  }
 
   // Final deterministic cleanup AFTER the reviewer. The reviewer edits text by
   // hand and occasionally INTRODUCES errors — e.g. article #148, it joined
@@ -1678,8 +1691,33 @@ Return corrected JSON with the same shape + a fixes_made list. If everything is 
  * Words more than one level above the target (N2/N1 for an N4 learner) go
  * last — they were met once in an old article and aren't worth drilling.
  */
+/**
+ * Vocab entries whose marked word was in the body before the reviewer and is
+ * gone after it (sentence deleted). Matched by the first 4 letters, macrons
+ * folded, so "tsuzukeru" matches "[NEW] tsuzukemasu". Entries that can't be
+ * matched before the review are kept — only clear removals are dropped.
+ */
+function pruneVocabAfterReview(before, after, words, tag) {
+  if (!Array.isArray(words) || !before || !after) return { kept: words, dropped: [] };
+  const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '');
+  const marked = text => [...text.matchAll(new RegExp(`\\[${tag}\\]\\s*([^\\s.,!?'’]+)`, 'g'))].map(m => fold(m[1]));
+  const stem = w => fold(w.word_romaji_macron || w.word_romaji).slice(0, 4);
+  const was = marked(before), now = marked(after);
+  const hit = (list, s) => s.length >= 2 && list.some(t => t.startsWith(s));
+  const kept = [], dropped = [];
+  for (const w of words) {
+    const s = stem(w);
+    if (hit(was, s) && !hit(now, s)) dropped.push(w.word_romaji_macron || w.word_romaji);
+    else kept.push(w);
+  }
+  return { kept, dropped };
+}
+
 function selectReviewWords(vocab, targetLevel, now = Date.now()) {
   return sortByReviewNeed(vocab, targetLevel, now)
+    // Never offer a word above the ceiling, or a kanji word no JLPT list knows
+    // (baikyaku 売却, shoyū 所有 came in as [REVIEW] in an N4 article, #214).
+    .filter(w => w._tier !== 6 && !(/[一-鿿]/.test(w.word_kanji || '') && !lookupLevel(w)))
     .map(w => `${w.word_romaji_macron}${w.word_kanji ? ` (${w.word_kanji})` : ''} = ${w.meaning_en}`);
 }
 
@@ -2133,7 +2171,7 @@ async function getArticleWithDetails(articleId, userId) {
 module.exports = {
   runPipeline, loadConfig, getArticleWithDetails,
   // exported for dry-run testing (generate without saving)
-  _internals: { prefetchAllData, searchNewsWithTopic, generateArticleWithVocab, generateQuiz, fixQuizGiveaways, stripAllMarkers, findExistingVocab, selectReviewWords, selectQuizReviewWords, sortByReviewNeed, loadConfig, pickGrammarFocus, planQuizMix },
+  _internals: { prefetchAllData, searchNewsWithTopic, generateArticleWithVocab, generateQuiz, fixQuizGiveaways, stripAllMarkers, findExistingVocab, selectReviewWords, pruneVocabAfterReview, selectQuizReviewWords, sortByReviewNeed, loadConfig, pickGrammarFocus, planQuizMix },
 };
 
 // Allow running directly: node agent/pipeline.js

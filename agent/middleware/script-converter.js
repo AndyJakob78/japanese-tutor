@@ -318,6 +318,13 @@ function convertKanjiFuriganaToRomaji(text) {
   out = out.replace(/([ァ-ヺー])（[぀-ゟ゠-ヿー\s]+）/g, '$1');
   out = out.replace(/([%％])（[぀-ゟ゠-ヿー\s]+）/g, '$1');   // 9%（パーセント） → "9%" (read as pāsento later)
 
+  // Step 0.9: Honorific after a name → hyphen: 赤沢（あかざわ）さん →
+  // "Akazawa-san", not "akazawasan". Family words keep the glued form
+  // (お父さん otōsan, 皆さん minasan). Only when the honorific ends the word.
+  out = out.replace(/([一-鿿々]+)（([぀-ゟ]+)）(さん|さま|くん|ちゃん)(?![぀-ゟ])/g,
+    (m, kanji, kana, hon) => (/^(父|母|兄|姉|皆|奥|爺|婆|叔父|叔母|伯父|伯母|祖父|祖母)$/.test(kanji)
+      ? m : `${kanji}（${kana}）-${hon}`));
+
   // Step 1: Strip kanji, keep only the furigana kana.
   out = out.replace(/[一-鿿々]+（([぀-ゟ゠-ヿー]+)）/g, '$1');
 
@@ -326,6 +333,8 @@ function convertKanjiFuriganaToRomaji(text) {
   // Detect particle position: は/へ at the END of a kana run (followed by
   // whitespace, punctuation, or end-of-string). Replace with わ/え which
   // wanakana correctly converts to wa/e.
+  // Particle compounds への / へは / へも: "rūru e no kotae", never "heno".
+  out = out.replace(/へ(の|は|も)(?=[\s。、！？」』’”]|$)/g, (m, p) => `え ${p === 'は' ? 'わ' : p}`);
   out = out.replace(/は(?=[\s。、！？]|$)/g, 'わ');
   out = out.replace(/へ(?=[\s。、！？]|$)/g, 'え');
 
