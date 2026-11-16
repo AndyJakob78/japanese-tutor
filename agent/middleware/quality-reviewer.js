@@ -444,7 +444,7 @@ These checks cost you nothing and catch real errors. Run them BEFORE returning y
 
 ═══════════════════════════════════════════════════════════════════════
 ## Keep the English translation in sync
-The learner reads translation_en next to the article. If you remove, add, split, merge or change the meaning of ANY sentence, return translation_en updated to match the corrected body sentence for sentence (same paragraphs). Never leave a sentence in translation_en that is no longer in the body (#211: three removed sentences stayed in the English). Pure spelling/spacing fixes don't need a translation change — then return translation_en unchanged.
+The learner reads translation_en next to the article. If you remove, add, split, merge or change the meaning of ANY sentence, return translation_en updated to match the corrected body sentence for sentence (same paragraphs). Never leave a sentence in translation_en that is no longer in the body (#211: three removed sentences stayed in the English). Pure spelling/spacing fixes don't need a translation change — then return translation_en as "" (empty string; the original is kept).
 
 ═══════════════════════════════════════════════════════════════════════
 ## ✂️ UNSUPPORTED CONTENT — DELETE IT (deleting is not inventing)
@@ -470,18 +470,18 @@ Respond with ONLY valid JSON (no markdown fences, no commentary):
   "title_romaji": "corrected title (or unchanged)",
   "summary_romaji": "corrected summary (or unchanged)",
   "body_romaji": "corrected body, markers preserved",
-  "translation_en": "English translation matching the corrected body (unchanged if no sentence changed)",
+  "translation_en": "English translation matching the corrected body — or \"\" (empty string) if no sentence's meaning changed, to save time",
   "newWords_fixes": [
     {"index": 0, "field": "word_romaji_macron", "from": "kaishū", "to": "baishū"}
   ],
   "fixes_made": [
-    "Replaced kaishū (recall) with baishū (acquisition) — source headline is M&A",
-    "Fixed €1 billion: was 'ichi-gyaku', now 'jū-oku yūro' (10×100M = 1B)"
+    "kaishū → baishū (M&A)",
+    "ichi-gyaku → jū-oku yūro"
   ]
 }
 
 If nothing needs fixing, return article unchanged with fixes_made: [].
-If you make ANY fix, the fixes_made array MUST explain what and why.
+If you make ANY fix, list it in fixes_made — terse, "from → to (reason)", at most 10 words each.
 newWords_fixes is for vocab-entry romaji corrections (index = 0-based in newWords array).`;
 }
 
@@ -563,8 +563,11 @@ Specific checks for THIS article:
 10. **Corporate verbs** (cat. 16, within JLPT budget): "kangaete imasu" over "omotte imasu" for corp stances; "sōgyō shita" over "dekita" for company founding (if sōgyō can be a [NEW] word); "kigyō-muke" over "kigyō yō".
 11. **Tokenization**: passive te-forms joined (tsukawarete, not tsukaware te).
 12. **Natural word combinations**: does every verb fit its object? A word-by-word translation can be grammatical but meaningless: "shokuji ya yasumu jikan wo tasukemasu" (helps meals and rest time, #211) → "shokuji wo yōi shimasu" / "yukkuri yasumeru yō ni tetsudaimasu". Fix only clear mismatches, with words at or below the user's level, and update translation_en if the meaning changes.
+   Also (#216): **missing verb** — "kādo wo [NEW] tsuzukemasu" (continues cards) → "kādo wo tsukuri [NEW] tsuzukemasu" (the marker stays right before ITS word); **English calques** a Japanese writer wouldn't use — "gurūpu no yunitto" (unit) → "gurūpu no kaisha" / "kogaisha"; **"tsumari"** only when the sentence really restates the one before, never as a filler; **fuzzy stand-ins** — "sono hito ka dōka mimasu" → "honnin ka dōka kakunin shimasu" (checks it's really you). Short fixes inside the sentence, no new facts.
 
 13. **Source check** (✂️ section): read translation_en sentence by sentence against the source news. Delete every quote, scene, opinion or prediction the source doesn't support, and update translation_en to match.
+
+14. **Faithful translation**: translation_en must say what the romaji says — no added words ("better services" when the body only says "sābisu"), no meaning the Japanese doesn't carry. Fix the English (or the Japanese, if the Japanese is the broken one) so they match.
 
 Return the corrected article. If nothing needs fixing, return it unchanged with fixes_made: [].`;
 
