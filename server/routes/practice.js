@@ -12,7 +12,7 @@ const router = express.Router();
 const { callClaudeJSON } = require('../services/claude');
 const { _internals: { loadConfig, findExistingVocab } } = require('../../agent/pipeline');
 const { lookupLevel } = require('../../agent/middleware/jlpt-levels');
-const { TYPES, saveMistakes, loadMistakes, summarizeWeakSpots } = require('../services/mistakes');
+const { TYPES, PATTERNS, saveMistakes, loadMistakes, summarizeWeakSpots } = require('../services/mistakes');
 
 const MAX_SENTENCE = 300;
 
@@ -25,7 +25,7 @@ Respond with ONLY JSON:
 {"verdict":"correct" | "almost" | "wrong",
  "corrected":"the full corrected sentence",
  "english":"what the corrected sentence means, in plain English",
- "fixes":[{"wrote":"the wrong part, copied from the student","correct":"the fixed part","why":"one short, plain English line","type":"particle | verb_form | word_order | word_choice | adjective | other","pattern":"short reusable label of the mistake, e.g. \"wo → ga with agaru\", \"masu-form after tai\", \"ni → de for place of action\""}],
+ "fixes":[{"wrote":"the wrong part, copied from the student","correct":"the fixed part","why":"one short, plain English line","type":"particle | verb_form | word_order | word_choice | adjective | other","pattern_key":"ONE key from the list below","pattern":"short reusable label of the mistake, e.g. \"wo → ga with agaru\", \"masu-form after tai\", \"ni → de for place of action\""}],
  "words":[{"word":"target word","used_correctly":true}],
  "tip":"one short encouraging line, or a tip if there was a mistake"}
 
@@ -35,6 +35,8 @@ Rules:
 - "corrected": Hepburn romaji with macrons (ā ī ū ē ō), "wo" for を, "wa" for the particle は. No hiragana, katakana or kanji anywhere in the JSON.
 - "fixes": at most 4, each about one small part (a particle, a verb ending), not the whole sentence. Empty when the sentence is correct.
 - "type" and "pattern": "pattern" names the kind of mistake so the same slip in another sentence gets the same label — particles as "wrong → right" plus the trigger ("wo → ga with intransitive verb", "ni → de for place of action"), verb forms by the rule ("dictionary form before koto", "te-form for requests"). Lowercase romaji, no sentence-specific nouns.
+- "pattern_key": file the mistake under exactly ONE of these keys (the app counts repeats per key, so always pick the closest one; "other-…" only when nothing fits):
+${PATTERNS.map(p => `  ${p.key} — ${p.label}`).join('\n')}
 - "why": one line a ${level} learner understands (e.g. "agaru happens by itself → ga, not wo"). No grammar jargon beyond particle and verb names.
 - "verdict": "correct" = no fixes; "almost" = 1–2 small fixes (particle, ending); "wrong" = the sentence does not work or a target word has the wrong meaning.
 - "words": one entry per target word. used_correctly = the word appears with the right meaning (a wrong particle around it is still used_correctly true). A target word that is missing is false.
@@ -66,6 +68,7 @@ router.post('/sentence', async (req, res, next) => {
     const fixes = (Array.isArray(result.fixes) ? result.fixes : []).slice(0, 4).map(f => ({
       wrote: String(f.wrote || ''), correct: String(f.correct || ''), why: String(f.why || ''),
       type: TYPES.includes(f.type) ? f.type : 'other', pattern: String(f.pattern || ''),
+      pattern_key: PATTERNS.some(p => p.key === f.pattern_key) ? f.pattern_key : undefined,
     }));
     const corrected = String(result.corrected || '');
     // Only the first try of a round counts (a retry after seeing the answer

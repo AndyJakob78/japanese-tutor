@@ -40,7 +40,8 @@ router.post('/generate', async (req, res, next) => {
     const overrides = {};
     if (req.body.region)              overrides.region              = req.body.region;
     if (req.body.proficiency_level)   overrides.proficiency_level   = req.body.proficiency_level;
-    if (req.body.new_words_per_article) overrides.new_words_per_article = req.body.new_words_per_article;
+    // 0 is a valid choice ("no new words"), so check for a value, not for truthiness
+    if (req.body.new_words_per_article !== undefined && req.body.new_words_per_article !== null) overrides.new_words_per_article = req.body.new_words_per_article;
     if (req.body.target_word_count)   overrides.target_word_count   = req.body.target_word_count;
     if (req.body.writing_system)      overrides.writing_system      = req.body.writing_system;
     if (req.body.custom_topic)        overrides.custom_topic        = req.body.custom_topic;

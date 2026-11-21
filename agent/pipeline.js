@@ -14,6 +14,7 @@ const { firestore, collections, getNextId } = require('../server/services/firest
 const { normalizeBody, normalizeWord } = require('./middleware/normalize');
 const { runQualityReviewer } = require('./middleware/quality-reviewer');
 const { lintArticle, lintDraft, summarize: summarizeLint } = require('./middleware/article-lint');
+const { markKnownWords, isName } = require('./middleware/known-words');
 const { fixStoredSpelling } = require('./middleware/spell-numbers');
 const { autoFixHallucinatedRomaji } = require('./middleware/wanakana-fix');
 const { convertScript, splitLongSentences } = require('./middleware/script-converter');
@@ -27,6 +28,18 @@ const wanakana = require('wanakana');
 /**
  * Load user configuration from Firestore (per-user).
  */
+/** How many [NEW] words the learner wants. 0 is a real choice (only words met before), so "|| 12" would be wrong. */
+function newWordTarget(config) {
+  const n = parseInt(config.new_words_per_article, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 12;
+}
+
+/** Fewer new words → more words from earlier articles: "5-8" normally, up to "10-13" with 0 new words. */
+function reviewWordTarget(config) {
+  const extra = Math.max(0, 5 - newWordTarget(config));
+  return `${5 + extra}-${8 + extra}`;
+}
+
 async function loadConfig(userId) {
   const snapshot = await collections.config
     .where('user_id', '==', userId)
@@ -252,7 +265,7 @@ function validateArticleQuality(article, config) {
   }
 
   // 4. [NEW] marker count — should be close to config.new_words_per_article
-  const targetNewWords = parseInt(config.new_words_per_article) || 12;
+  const targetNewWords = newWordTarget(config);
   if (article.body_romaji) {
     const newMarkerCount = (article.body_romaji.match(/\[NEW\]/g) || []).length;
     const diff = Math.abs(newMarkerCount - targetNewWords);
@@ -594,7 +607,7 @@ function getWritingSystemPrompt(writingSystem, config) {
       systemIntro: `You write Japanese learning articles in hiragana and katakana (no kanji, no romaji) and extract vocabulary.
 
 CRITICAL — KANA MODE: The title_romaji, summary_romaji, and body_romaji JSON fields must ALL be written in hiragana/katakana. The field names are misleading — ignore the word "romaji" in them. Every character of the title, summary, and article body must be hiragana or katakana. NO romaji, NO kanji anywhere in those three fields.`,
-      userRules: `Hiragana + katakana only — NO romaji, NO kanji in title, summary, or body. Add spaces between words. Max ${config.max_sentence_length} words per sentence. Exactly ${config.new_words_per_article} [NEW] words. Level: ${config.proficiency_level}. Include 1-2 grammar points. Also extract full vocabulary metadata for each [NEW] and [REVIEW] word.`,
+      userRules: `Hiragana + katakana only — NO romaji, NO kanji in title, summary, or body. Add spaces between words. Max ${config.max_sentence_length} words per sentence. Exactly ${newWordTarget(config)} [NEW] words. Level: ${config.proficiency_level}. Include 1-2 grammar points. Also extract full vocabulary metadata for each [NEW] and [REVIEW] word.`,
     };
   } else if (writingSystem === 'kanji') {
     const kanjiSkill = readSkill('kanji-standards/SKILL.md');
@@ -611,7 +624,7 @@ HOMOPHONE DISAMBIGUATION — choose the right kanji based on context:
 - bunka → 文化 (culture — sociology) vs 分科 (subcommittee — corporate/project context); if neither fits a business context, double-check whether 分類 (bunrui — category) was intended
 - jōkyō (状況 — status, for progress reports) vs jōken (条件 — requirements, for contracts/specs) — pick by intent
 Always pick the kanji that matches the surrounding semantic context of the news story.`,
-      userRules: `Kanji + furigana in full-width parentheses — NO romaji in title, summary, or body. Use kanji at or below ${config.proficiency_level} level. Add spaces between phrases. Separate the words inside katakana compound names with ・ (プリンス・グランド・リゾート, ヴィラ・プリンス) — the romaji reader sees them as separate words. List every proper noun (people, places, companies, brands, products, events) in "proper_nouns" with its Hepburn romaji: capital letters, spaces between words, macrons (軽井沢 → Karuizawa, 長野県 → Nagano-ken, プリンス・グランド・リゾート → Purinsu Gurando Rizōto). Max ${config.max_sentence_length} words per sentence. Exactly ${config.new_words_per_article} [NEW] words. Level: ${config.proficiency_level}. Include 1-2 grammar points. Also extract full vocabulary metadata for each [NEW] and [REVIEW] word.`,
+      userRules: `Kanji + furigana in full-width parentheses — NO romaji in title, summary, or body. Use kanji at or below ${config.proficiency_level} level. Add spaces between phrases. Separate the words inside katakana compound names with ・ (プリンス・グランド・リゾート, ヴィラ・プリンス) — the romaji reader sees them as separate words. List every proper noun (people, places, companies, brands, products, events) in "proper_nouns" with its Hepburn romaji: capital letters, spaces between words, macrons (軽井沢 → Karuizawa, 長野県 → Nagano-ken, プリンス・グランド・リゾート → Purinsu Gurando Rizōto). Max ${config.max_sentence_length} words per sentence. Exactly ${newWordTarget(config)} [NEW] words. Level: ${config.proficiency_level}. Include 1-2 grammar points. Also extract full vocabulary metadata for each [NEW] and [REVIEW] word.`,
     };
   } else {
     // Default: romaji
@@ -631,7 +644,7 @@ The title_romaji, summary_romaji, and body_romaji fields may ONLY contain:
 
 ANY hiragana (あ–ん), katakana (ア–ン), or kanji (漢字) in those three fields = FAILED OUTPUT.
 Do not include Japanese script anywhere in the article — it belongs ONLY in vocabulary metadata fields (word_kana, word_kanji).`,
-      userRules: `Hepburn romaji only — NO hiragana/katakana/kanji in the article body, title, or summary. Max ${config.max_sentence_length} words per sentence. Exactly ${config.new_words_per_article} [NEW] words. Level: ${config.proficiency_level}. Include 1-2 grammar points. Also extract full vocabulary metadata for each [NEW] and [REVIEW] word.`,
+      userRules: `Hepburn romaji only — NO hiragana/katakana/kanji in the article body, title, or summary. Max ${config.max_sentence_length} words per sentence. Exactly ${newWordTarget(config)} [NEW] words. Level: ${config.proficiency_level}. Include 1-2 grammar points. Also extract full vocabulary metadata for each [NEW] and [REVIEW] word.`,
     };
   }
 }
@@ -1009,15 +1022,17 @@ This article uses THREE vocabulary tiers. Treat them as distinct — do not mix.
    - 技術 (gijutsu) → only as [NEW] for N4+ users
    If a concept genuinely requires an N3 word, MARK IT [NEW]. Don't sneak it in as background.`}
 
-2. [NEW] words — exactly ${config.new_words_per_article} of them:
+2. [NEW] words — exactly ${newWordTarget(config)} of them:${newWordTarget(config) === 0 ? `
+   The student chose NO new words. Do not mark anything [NEW] and leave newWords EMPTY ([]). Write the whole article with words at or below ${config.proficiency_level} and with the student's known words (rule 3). If the story's key word is above level, explain it in simple words instead of marking it.` : `
    Every single [NEW] word MUST be at ${config.proficiency_level} (the target level).
    Not easier, not harder. These are the "stretch" words the student is learning this article.
    The jlpt_level field on each newWords entry MUST equal "${config.proficiency_level}".
+   WHICH words: the student's word list is three quarters nouns, and verbs are their weakest group. ${newWordTarget(config) >= 4 ? 'At least 2' : 'At least 1'} of the [NEW] words must be a verb or an adjective the story really uses (uru, sagasu, okoru, harau, fueru — not another abstract noun). Prefer a word the student will meet again in daily life over a one-off news term. At most ONE [NEW] word may be above ${config.proficiency_level} (see TITLE RULE).`}
    TITLE RULE: keep title words at or below ${config.proficiency_level} where possible. If the story's key word is unavoidably above level (e.g. 合併 in a merger story, 辞任 in a resignation story), it MUST be one of the [NEW] words, appear in newWords with its TRUE jlpt_level, and be explained with つまり in the body — never leave the story's key word unexplained.
 
 3. [REVIEW] words — pulled from the user's known-words list (provided in the user prompt):
    Actively reuse words the student has ALREADY learned and mark each one with [REVIEW] in the body.
-   Target ~5-8 review words per article. If the user's known-words list has fewer available, use whatever IS there — do NOT invent new ones or repeat the same word multiple times to hit a target.
+   Target ~${reviewWordTarget(config)} review words per article${newWordTarget(config) < 5 ? ' (the student asked for few new words, so more of the article should be words they have met before)' : ''}. If the user's known-words list has fewer available, use whatever IS there — do NOT invent new ones or repeat the same word multiple times to hit a target.
    Review words MAY be at ${config.proficiency_level} (the student already learned them) — this is the only exception to rule 1.
 
 🛑 **Sentences must be max ${config.max_sentence_length} words — HARD LIMIT.** Count each romaji word (space-separated) before finishing a sentence. If a sentence exceeds the limit, SPLIT it with a period. This is enforced by an automated check that will trigger regeneration if violated.
@@ -1118,7 +1133,7 @@ TARGET LENGTH: up to ${config.target_word_count || 200} content words in the bod
 
 IMPORTANT: This article is for a ${config.proficiency_level} level student. Follow the three-tier vocabulary stratification in the system prompt:
 - Background = ${isN5User ? 'N5' : `${easierLevels} ONLY (one tier below ${config.proficiency_level})`}
-- [NEW] words = EXACTLY ${config.proficiency_level} (all ${config.new_words_per_article} of them)
+- [NEW] words = EXACTLY ${config.proficiency_level} (all ${newWordTarget(config)} of them)
 - [REVIEW] words = from the known-words list below, marked [REVIEW] in the body
 If the news topic is complex, simplify it.
 
@@ -1127,9 +1142,10 @@ Summary: ${newsData.summary}
 
 ${knownWords.length === 0 ? `## 🚫 [REVIEW] MARKERS DISABLED — COLD-START ARTICLE
 
-The user has ZERO previously-learned words. You MUST NOT use any [REVIEW] markers in body_romaji. You MUST leave the reviewWords array EMPTY ([]). Focus entirely on the [NEW] vocabulary. Do NOT mark any words as [REVIEW] no matter how level-appropriate they seem — [REVIEW] only applies to words the user has actually encountered in previous articles, and they haven't read any yet.` : `## Known words for [REVIEW] reuse (${knownWords.length} available, showing the 30 most in need of review — earlier = more urgent):
-${knownWords.slice(0, 30).join(', ')}
-Prefer words from the START of this list that fit the story. Skip any listed word you know is harder than ${JLPT_ORDER[Math.min(JLPT_ORDER.indexOf(config.proficiency_level) + 1, JLPT_ORDER.length - 1)] || 'N3'} (some stored levels are wrong). Aim for ~5-8 of these to appear in the article wrapped in [REVIEW] markers. If fewer than 5 are listed above, use whatever is available — do not invent [REVIEW] markers for words NOT in this list.`}
+The user has ZERO previously-learned words. You MUST NOT use any [REVIEW] markers in body_romaji. You MUST leave the reviewWords array EMPTY ([]). Focus entirely on the [NEW] vocabulary. Do NOT mark any words as [REVIEW] no matter how level-appropriate they seem — [REVIEW] only applies to words the user has actually encountered in previous articles, and they haven't read any yet.` : `## Known words for [REVIEW] reuse (${knownWords.length} available, showing the ${newWordTarget(config) < 5 ? 80 : 40} most in need of review — earlier = more urgent):
+${knownWords.slice(0, newWordTarget(config) < 5 ? 80 : 40).join(', ')}
+
+Prefer words from the START of this list that fit the story. Skip any listed word you know is harder than ${JLPT_ORDER[Math.min(JLPT_ORDER.indexOf(config.proficiency_level) + 1, JLPT_ORDER.length - 1)] || 'N3'} (some stored levels are wrong). Aim for ~${reviewWordTarget(config)} of these to appear in the article wrapped in [REVIEW] markers. If fewer than 5 are listed above, use whatever is available — do not invent [REVIEW] markers for words NOT in this list.`}
 
 ${weakSpotsPrompt(config._weak_spots)}
 
@@ -1370,12 +1386,27 @@ Rules: ${wsPrompt.userRules}`;
   if (result.title_romaji)   result.title_romaji   = stripAllMarkers(result.title_romaji);
   if (result.summary_romaji) result.summary_romaji = stripAllMarkers(result.summary_romaji);
 
+  // Known words (code, no Claude call): a [NEW] word the learner already has
+  // becomes [REVIEW], and words they have met that stand in the text unmarked
+  // get a [REVIEW] marker — up to the review target, most needed first.
+  if (postWritingSystem === 'romaji' && Array.isArray(config._vocab) && config._vocab.length) {
+    const maxReview = parseInt(reviewWordTarget(config).split('-')[1], 10);
+    const marked = markKnownWords(result, sortByReviewNeed(config._vocab, config.proficiency_level).filter(w => w._tier !== 6), { maxReview, isCommon: isCommonWord });
+    if (marked.converted.length || marked.added.length) {
+      console.log(`[Known words] [NEW] → [REVIEW]: ${marked.converted.join(', ') || '-'} | marked [REVIEW]: ${marked.added.join(', ') || '-'}`);
+    }
+  }
+
   // Code check, part 3: what is still there after the reviewer is saved with
   // the article (lint_warnings), so repeat offenders show up in
   // scripts/lint-articles.js instead of only on the reader's screen.
   if (postWritingSystem === 'romaji') {
     const lintAfter = lintArticle(result, config);
-    result._lint_warnings = summarizeLint(lintAfter);
+    // Word mix: the learner's list is mostly nouns, so each article should bring verbs / adjectives too.
+    const newPos = (result.newWords || []).map(w => String(w.part_of_speech || '').toLowerCase());
+    const actionWords = newPos.filter(p => /verb|adj/.test(p)).length;
+    const fewVerbs = newPos.length >= 2 && actionWords < (newPos.length >= 4 ? 2 : 1);
+    result._lint_warnings = [...summarizeLint(lintAfter), ...(fewVerbs ? [`few-verbs: ${actionWords} of ${newPos.length} new words are verbs or adjectives`] : [])];
     console.log(lintAfter.length
       ? `[Lint] ⚠️  ${lintAfter.length} finding(s) left after review: ${result._lint_warnings.join(' | ')}`
       : `[Lint] ✅ clean after review (${lintBefore.length} found before)`);
@@ -1489,7 +1520,7 @@ async function generateQuiz(article, config, quizReviewWords = []) {
 
 🎯 DIFFICULTY (the user said quizzes were too easy — the right option was guessable without knowing the word):
 
-QUESTION MIX — exactly these ${questionPlan.length} questions, in this order: ${questionPlan.join(', ')}. Each meaning / reverse / context question tests a DIFFERENT [NEW] word.
+QUESTION MIX — exactly these ${questionPlan.length} questions, in this order: ${questionPlan.join(', ')}. Each meaning / reverse / context question tests a DIFFERENT [NEW] word${(article.newWords || []).length < 3 ? ' — this article has few or no [NEW] words, so use the [REVIEW] words of this article (listed in the user message) as the test targets instead' : ''}.
 - **meaning**: Japanese word → English meaning.
 - **reverse**: English meaning → pick the Japanese word (all 4 options are Japanese words). Stem e.g. "'To sell' wa nihongo de nan desu ka?"
 - **context**: a sentence from the article with the [NEW] word replaced by ___; the options are 4 Japanese words that all fit grammatically, only one fits the meaning.
@@ -1546,7 +1577,10 @@ Article: ${article.body_romaji}
 
 [NEW] words from this article (these ARE the test targets — use them in correct_answer/vocabulary_word):
 ${newWordsList || '(none)'}
-${reviewTargets.length ? `
+${(article.newWords || []).length < 3 && (article.reviewWords || []).length ? `
+[REVIEW] words in this article (test targets when the [NEW] words run out):
+${(article.reviewWords || []).map(w => `${w.word_romaji_macron} = ${w.meaning_en}`).join(', ')}
+` : ''}${reviewTargets.length ? `
 Older words for the "review" questions (one question each):
 ${reviewTargets.map(w => `${w.word_romaji_macron} = ${w.meaning_en}`).join('\n')}
 ` : ''}
@@ -1757,6 +1791,8 @@ function selectReviewWords(vocab, targetLevel, now = Date.now()) {
     // Never offer a word above the ceiling, or a kanji word no JLPT list knows
     // (baikyaku 売却, shoyū 所有 came in as [REVIEW] in an N4 article, #214).
     .filter(w => w._tier !== 6 && !(/[一-鿿]/.test(w.word_kanji || '') && !lookupLevel(w)))
+    // company and place names from old articles are not vocabulary to bring back
+    .filter(w => !isName(w))
     .map(w => `${w.word_romaji_macron}${w.word_kanji ? ` (${w.word_kanji})` : ''} = ${w.meaning_en}`);
 }
 
@@ -1806,6 +1842,9 @@ async function prefetchAllData(userId, overrides) {
   ]);
 
   const mergedConfig = { ...config, ...overrides };
+  // The learner's whole word list, for marking known words in the finished article.
+  // Not enumerable: it must never end up in a log line or a saved document.
+  Object.defineProperty(mergedConfig, '_vocab', { value: allVocabSnapshot.docs.map(doc => doc.data()), enumerable: false });
   // Grammar slips from sentence building: the article uses these patterns on purpose
   mergedConfig._weak_spots = summarizeWeakSpots(mistakes, 3);
 
@@ -2212,7 +2251,7 @@ async function getArticleWithDetails(articleId, userId) {
 module.exports = {
   runPipeline, loadConfig, getArticleWithDetails,
   // exported for dry-run testing (generate without saving)
-  _internals: { prefetchAllData, searchNewsWithTopic, generateArticleWithVocab, generateQuiz, fixQuizGiveaways, stripAllMarkers, findExistingVocab, selectReviewWords, pruneVocabAfterReview, selectQuizReviewWords, sortByReviewNeed, loadConfig, pickGrammarFocus, planQuizMix },
+  _internals: { newWordTarget, reviewWordTarget, prefetchAllData, searchNewsWithTopic, generateArticleWithVocab, generateQuiz, fixQuizGiveaways, stripAllMarkers, findExistingVocab, selectReviewWords, pruneVocabAfterReview, selectQuizReviewWords, sortByReviewNeed, loadConfig, pickGrammarFocus, planQuizMix },
 };
 
 // Allow running directly: node agent/pipeline.js

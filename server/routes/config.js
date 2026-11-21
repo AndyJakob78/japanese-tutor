@@ -7,6 +7,13 @@ const express = require('express');
 const router = express.Router();
 const { firestore, collections } = require('../services/firestore');
 
+// Keys the app may add for German / English, with their allowed values.
+const LANGUAGE_KEYS = {
+  learning_language: ['ja', 'de', 'en'],
+  level_de: ['A1-A2', 'B1', 'B2'],
+  level_en: ['A1-A2', 'B1', 'B2'],
+};
+
 // GET /api/config — get all config (per-user)
 router.get('/', async (req, res, next) => {
   try {
@@ -49,11 +56,17 @@ router.put('/', async (req, res, next) => {
     const batch = firestore.batch();
 
     for (const [key, value] of Object.entries(updates)) {
+      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+      // Settings for the other learning languages do not exist for older
+      // accounts — create them the first time the app sends them.
+      if (!validDocs[key] && LANGUAGE_KEYS[key] && LANGUAGE_KEYS[key].includes(serialized)) {
+        batch.set(collections.config.doc(), { key, value: serialized, user_id: req.userId, updated_at: new Date().toISOString() });
+        continue;
+      }
       if (!validDocs[key]) {
         errors.push(`Unknown config key: ${key}`);
         continue;
       }
-      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
       batch.update(validDocs[key], {
         value: serialized,
         updated_at: new Date().toISOString(),

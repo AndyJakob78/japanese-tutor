@@ -99,6 +99,13 @@ struct ConfigView: View {
                     ProgressView("Loading settings...")
                 }
             } else {
+                // Learning language (German / English have their own screens)
+                Section {
+                    LearningLanguagePicker(title: "Learning language")
+                } footer: {
+                    Text("German and English are for Japanese speakers; their screens are in Japanese.")
+                }
+
                 // Writing System
                 Section {
                     Picker("Writing System", selection: $viewModel.config.writingSystem) {
@@ -196,9 +203,14 @@ struct ConfigView: View {
                             get: { Double(viewModel.config.newWordsPerArticle) },
                             set: { viewModel.config.newWordsPerArticle = Int($0) }
                         ),
-                        in: 5...20,
+                        in: 0...20,
                         step: 1
                     )
+                    Text(viewModel.config.newWordsPerArticle == 0
+                         ? "0 = no new words. Articles use only words you have met before, with more review words."
+                         : "Fewer new words means more review words from your earlier articles.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
                     HStack {
                         Text("Max sentence length")

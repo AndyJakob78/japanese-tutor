@@ -30,3 +30,6 @@ backups/
 AppStoreAssets/app-preview/out/tmp/
 AppStoreAssets/app-preview/clips/
 AppStoreAssets/upload-1.4/
+
+# Sample output of the German / English pipeline (local test runs)
+multilang/out/

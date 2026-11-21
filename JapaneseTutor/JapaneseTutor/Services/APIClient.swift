@@ -53,6 +53,12 @@ class APIClient {
         request.httpMethod = method
         request.setValue(userId, forHTTPHeaderField: "X-User-ID")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // German / English: the server serves that language's own data.
+        // Japanese sends no header, exactly as before.
+        let language = LearningLanguage.current
+        if language != .japanese {
+            request.setValue(language.rawValue, forHTTPHeaderField: "X-Learning-Language")
+        }
         return request
     }
 
@@ -130,8 +136,10 @@ class APIClient {
         return try await patch("/vocabulary/\(id)", body: ["status": status])
     }
 
-    func recordTestResult(id: Int, correct: Bool) async throws -> TestResultResponse {
-        return try await post("/vocabulary/\(id)/test", body: ["correct": correct])
+    /// mode: "typed" (Daily Review) and "sentence" (own sentence) are recall and can make a
+    /// word "known"; "choice" (multiple choice) is counted but never promotes a word.
+    func recordTestResult(id: Int, correct: Bool, mode: String = "choice") async throws -> TestResultResponse {
+        return try await post("/vocabulary/\(id)/test", body: TestResultRequest(correct: correct, mode: mode))
     }
 
     /// Words for the daily typed review (due / missed / still learning first)
@@ -278,6 +286,87 @@ class APIClient {
     }
 }
 
+// MARK: - German / English (see multilang/server.js on the server)
+
+extension APIClient {
+    func fetchLangArticles() async throws -> LangArticleListResponse {
+        return try await get("/articles?limit=50")
+    }
+
+    func fetchLangArticle(id: Int) async throws -> LangArticle {
+        return try await get("/articles/\(id)")
+    }
+
+    /// Throws `APIError.trialExhausted` like the Japanese call (the trial is shared).
+    func generateLangArticle(level: String, topic: String? = nil) async throws -> LangArticle {
+        var body: [String: Any] = ["level": level]
+        if let t = topic, !t.isEmpty { body["custom_topic"] = t }
+        var request = makeRequest("/articles/generate", method: "POST")
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 600
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, http.statusCode == 403,
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           (json["error"] as? String) == "TRIAL_EXHAUSTED" {
+            throw APIError.trialExhausted
+        }
+        try validateResponse(response)
+        return try decoder.decode(LangArticle.self, from: data)
+    }
+
+    func markLangArticleRead(id: Int) async throws {
+        let _: LangArticle = try await patch("/articles/\(id)", body: ["read_at": true])
+    }
+
+    func deleteLangArticle(id: Int) async throws {
+        let _: LangDeleteResponse = try await delete("/articles/\(id)")
+    }
+
+    func submitLangQuiz(articleId: Int, answers: [Int]) async throws -> LangQuizResult {
+        return try await post("/articles/\(articleId)/quiz", body: ["answers": answers])
+    }
+
+    func fetchLangVocabulary(status: String? = nil) async throws -> LangVocabularyResponse {
+        return try await get("/vocabulary" + (status.map { "?status=\($0)" } ?? ""))
+    }
+
+    func fetchLangReviewWords(limit: Int = 10) async throws -> LangReviewResponse {
+        return try await get("/vocabulary/review?limit=\(limit)")
+    }
+
+    func recordLangTest(wordId: String, correct: Bool) async throws {
+        let _: LangTestResponse = try await post("/vocabulary/\(wordId)/test", body: ["correct": correct])
+    }
+
+    func setLangWordStatus(wordId: String, status: String) async throws {
+        let _: LangWord = try await patch("/vocabulary/\(wordId)", body: ["status": status])
+    }
+
+    func deleteLangWord(wordId: String) async throws {
+        let _: LangDeleteResponse = try await delete("/vocabulary/\(wordId)")
+    }
+
+    func addLangWord(_ entry: LangLookup, articleId: Int?) async throws -> LangWord {
+        return try await post("/vocabulary", body: LangAddWordRequest(word: entry.word, base: entry.base, pos: entry.pos, meaning: entry.meaning, example: entry.example, exampleTranslation: entry.exampleTranslation, articleId: articleId))
+    }
+
+    func lookupLangWord(_ word: String, sentence: String) async throws -> LangLookup {
+        return try await post("/practice/lookup", body: ["word": word, "sentence": sentence])
+    }
+
+    func checkLangSentence(_ request: LangSentenceRequest) async throws -> LangSentenceCheck {
+        return try await post("/practice/sentence", body: request)
+    }
+
+    func fetchLangMistakes() async throws -> LangMistakesResponse {
+        return try await get("/practice/mistakes")
+    }
+
+    func fetchLangStats() async throws -> LangStats {
+        return try await get("/stats")
+    }
+}
+
 // MARK: - Supporting types
 
 /// Returned by GET /api/device/status and POST /api/device/upgrade
@@ -293,6 +382,11 @@ struct DeviceStatus: Codable {
         case isPro           = "is_pro"
         case trialsRemaining = "trials_remaining"
     }
+}
+
+struct TestResultRequest: Encodable {
+    let correct: Bool
+    let mode: String
 }
 
 /// Empty body for POST requests that carry no payload

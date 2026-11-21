@@ -98,6 +98,8 @@ async function callClaude(systemPrompt, userPrompt, options = {}) {
     });
     assertNotRefused(response);
 
+    // Timing diagnosis (scripts only): how much the model wrote and thought
+    if (process.env.DEBUG_USAGE && response.usage) console.log('USAGE', JSON.stringify({ out: response.usage.output_tokens, in: response.usage.input_tokens, cache_read: response.usage.cache_read_input_tokens, cache_write: response.usage.cache_creation_input_tokens, thinking_chars: response.content.filter(b => b.type === 'thinking').reduce((n, b) => n + (b.thinking || '').length, 0), text_chars: response.content.filter(b => b.type === 'text').reduce((n, b) => n + b.text.length, 0), model: response.model }));
     // Log cache performance (helps track savings)
     if (response.usage) {
       const cached = response.usage.cache_read_input_tokens || 0;

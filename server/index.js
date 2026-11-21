@@ -59,6 +59,11 @@ app.use('/api', async (req, res, next) => {
   next();
 });
 
+// Learning language. Requests with the header X-Learning-Language: de|en are
+// served from that language's own collections (multilang/server.js). Without
+// the header — every app version so far — nothing changes: Japanese.
+app.use('/api', require('../multilang/service').middleware);
+
 // Routes
 app.use('/api/articles', require('./routes/articles'));
 app.use('/api/vocabulary', require('./routes/vocabulary'));

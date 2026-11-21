@@ -49,7 +49,7 @@ class TypedReviewViewModel {
         if answered.insert(word.id).inserted {
             if correct { firstTryCorrect += 1 } else { missed.append(word) }
             // A hint makes it practice, not proof of memory
-            _ = try? await APIClient.shared.recordTestResult(id: word.id, correct: correct)
+            _ = try? await APIClient.shared.recordTestResult(id: word.id, correct: correct, mode: "typed")
         }
     }
 

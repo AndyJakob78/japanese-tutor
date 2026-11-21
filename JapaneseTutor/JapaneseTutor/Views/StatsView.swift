@@ -94,6 +94,16 @@ struct StatsView: View {
             statBox(label: "Total Words", value: "\(vocab.total)", color: .accentColor)
             statBox(label: "Due for Review", value: "\(vocab.dueForReview)", color: .orange)
         }
+        // Recall (typed answers, own sentences) and recognition (multiple choice) are different skills
+        if let recall = vocab.recall, let choice = vocab.choice {
+            HStack(spacing: 16) {
+                statBox(label: "Typed recall", value: recall.percent.map { "\($0)%" } ?? "–", color: .green)
+                statBox(label: "Multiple choice", value: choice.percent.map { "\($0)%" } ?? "–", color: .blue)
+            }
+            Text("Only typed answers and your own sentences move a word to Known.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     @ViewBuilder

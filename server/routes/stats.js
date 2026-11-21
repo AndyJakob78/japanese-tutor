@@ -22,11 +22,18 @@ router.get('/', async (req, res, next) => {
 
     const now = new Date().toISOString();
     let dueForReview = 0;
+    // recall = typed answers and own sentences (app 1.5+); everything else is multiple choice
+    let recalled = 0, recalledCorrect = 0, tested = 0, testedCorrect = 0;
 
     for (const word of allVocab) {
       if (statusCounts.hasOwnProperty(word.status)) {
         statusCounts[word.status]++;
       }
+
+      recalled += word.times_recalled || 0;
+      recalledCorrect += word.times_recalled_correct || 0;
+      tested += word.times_tested || 0;
+      testedCorrect += word.times_tested_correct || 0;
 
       if (word.jlpt_level) {
         levelCounts[word.jlpt_level] = (levelCounts[word.jlpt_level] || 0) + 1;
@@ -85,6 +92,8 @@ router.get('/', async (req, res, next) => {
         byStatus: statusCounts,
         byLevel,
         dueForReview,
+        recall: { tested: recalled, correct: recalledCorrect, percent: recalled ? Math.round((recalledCorrect / recalled) * 100) : null },
+        choice: { tested: tested - recalled, correct: testedCorrect - recalledCorrect, percent: tested - recalled > 0 ? Math.round(((testedCorrect - recalledCorrect) / (tested - recalled)) * 100) : null },
       },
       articles: {
         total: totalArticles,

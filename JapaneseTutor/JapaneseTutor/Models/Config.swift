@@ -105,6 +105,16 @@ struct VocabularyStats: Codable {
     let byStatus: StatusCounts
     let byLevel: [LevelCount]
     let dueForReview: Int
+    /// Typed answers and own sentences (app 1.5+) — real recall
+    let recall: AnswerStats?
+    /// Multiple choice — recognition
+    let choice: AnswerStats?
+}
+
+struct AnswerStats: Codable {
+    let tested: Int
+    let correct: Int
+    let percent: Int?
 }
 
 struct StatusCounts: Codable {

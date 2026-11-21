@@ -68,6 +68,34 @@ Japanese,JLPT,learn Japanese,romaji,kanji,hiragana,news,vocabulary,N3,N4,N5
 
 ---
 
+## What's New in 1.5
+
+```
+Review that fits how you really learn:
+
+• Choose 0 to 20 new words per article. With 0, articles use only words you have met before, so you practise what you already know.
+• Words you know are now marked as review words in every article, not shown again as new.
+• A word only counts as Known after you typed it from memory, or used it in your own sentence, on two different days. It then comes back after 1, 3, 7, 14 and 30 days.
+• Stats now show typed recall and multiple choice separately, so you see what you can really produce.
+• My Mistakes groups your corrections into clear patterns, such as wa / ga or verb pairs, so repeated slips add up.
+• New words now include more verbs and adjectives, not only nouns.
+• Better articles: full sentences, no repeated facts, numbers written out, and name-san with a hyphen.
+```
+
+(817 characters; the limit is 4,000.)
+
+App name, subtitle, description, keywords and screenshots stay as in 1.4.
+
+**App Review notes (add to the existing notes):**
+
+```
+Version 1.5 improves vocabulary review: the number of new words per article can be set
+from 0 to 20, words the learner already knows are marked as review words, a word counts
+as Known only after typed recall on two different days, and the Stats screen shows typed
+recall and multiple choice separately. The free trial (3 articles) and the subscription
+are unchanged.
+```
+
 ## What's New in 1.3
 
 ```

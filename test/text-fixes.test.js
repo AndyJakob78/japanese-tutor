@@ -126,10 +126,11 @@ test('mistake memory groups the same slip and builds the article hint', () => {
     m('wo->ga with agaru', '2026-11-09T10:00:00Z'),
     m('masu-form after tai', '2026-11-11T11:00:00Z', 'verb_form'),
   ]);
-  assert.equal(spots[0].pattern, 'wo → ga with agaru');
+  // since 2026-11-21 weak spots carry the label of a FIXED pattern, so repeats add up
+  assert.equal(spots[0].pattern_key, 'wo-ga-intransitive');
   assert.equal(spots[0].count, 2);
-  assert.equal(spots[1].pattern, 'masu-form after tai');      // tie on count: most recent first
-  assert.match(weakSpotsPrompt(spots), /Particles: wo → ga with agaru/);
+  assert.equal(spots[1].pattern_key, 'other-verb-form');      // tie on count: most recent first
+  assert.match(weakSpotsPrompt(spots), /Particles: wo → ga with verbs that happen by themselves/);
   assert.equal(weakSpotsPrompt([]), '');
 });
 

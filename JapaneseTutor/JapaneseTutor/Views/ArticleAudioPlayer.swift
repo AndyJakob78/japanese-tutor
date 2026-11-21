@@ -26,6 +26,9 @@ class ArticleSpeaker: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelega
         var speechRate: Float { self == .slow ? 0.33 : self == .medium ? 0.42 : 0.5 }
     }
 
+    /// "ja" (default) reads romaji; "de" / "en" read the text as written and
+    /// show the controls in Japanese (those learners are Japanese speakers).
+    var language = "ja"
     var sentences: [String] = []
     var index = 0
     var isPlaying = false
@@ -58,8 +61,14 @@ class ArticleSpeaker: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelega
         if let speech = try? await APIClient.shared.fetchSpeech(articleId: articleId), !speech.sentences.isEmpty {
             sentences = speech.sentences
             cloudAvailable = true
-        } else {
+        } else if language == "ja" {
             sentences = RomajiToKana.sentences(of: body).map(\.romaji)
+        } else {
+            var found: [String] = []
+            body.enumerateSubstrings(in: body.startIndex..., options: .bySentences) { s, _, _, _ in
+                if let s = s?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty { found.append(s) }
+            }
+            sentences = found
         }
         isLoading = false
     }
@@ -111,7 +120,7 @@ class ArticleSpeaker: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelega
                 p.rate = self.speed.playerRate
                 p.delegate = self
                 self.player = p
-                self.voiceName = self.voice == "male" ? "Male" : "Female"
+                self.voiceName = self.language == "ja" ? (self.voice == "male" ? "Male" : "Female") : (self.voice == "male" ? "男性" : "女性")
                 p.play()
                 self.prefetch(articleId: articleId, index: i + 1)
             } else {
@@ -142,9 +151,10 @@ class ArticleSpeaker: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelega
     }
 
     private func speakOnDevice(_ i: Int) {
-        let u = AVSpeechUtterance(string: RomajiToKana.convert(sentences[i]))
-        let ja = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("ja") }
-        u.voice = ja.max { $0.quality.rawValue < $1.quality.rawValue } ?? AVSpeechSynthesisVoice(language: "ja-JP")
+        let u = AVSpeechUtterance(string: language == "ja" ? RomajiToKana.convert(sentences[i]) : sentences[i])
+        let code = language == "de" ? "de-DE" : language == "en" ? "en-US" : "ja-JP"
+        let ja = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix(String(code.prefix(2))) }
+        u.voice = ja.max { $0.quality.rawValue < $1.quality.rawValue } ?? AVSpeechSynthesisVoice(language: code)
         voiceName = u.voice?.name ?? "?"
         u.rate = speed.speechRate
         synth.speak(u)
@@ -179,6 +189,12 @@ struct ArticleAudioBar: View {
     @Bindable var speaker: ArticleSpeaker
     let onClose: () -> Void
 
+    private var japaneseUI: Bool { speaker.language != "ja" }
+    private func speedLabel(_ s: ArticleSpeaker.Speed) -> String {
+        guard japaneseUI else { return s.label }
+        return s == .slow ? "ゆっくり" : s == .medium ? "ふつう" : "速い"
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             if speaker.index < speaker.sentences.count {
@@ -210,22 +226,22 @@ struct ArticleAudioBar: View {
                 Button { speaker.jump(by: 1) } label: { Image(systemName: "forward.fill") }
                 Spacer()
                 Menu {
-                    Section("Speed") {
+                    Section(japaneseUI ? "速さ" : "Speed") {
                         ForEach(ArticleSpeaker.Speed.allCases) { s in
                             Button { speaker.setSpeed(s) } label: {
-                                if s == speaker.speed { Label(s.label, systemImage: "checkmark") } else { Text(s.label) }
+                                if s == speaker.speed { Label(speedLabel(s), systemImage: "checkmark") } else { Text(speedLabel(s)) }
                             }
                         }
                     }
-                    Section("Voice") {
-                        ForEach([("female", "Female"), ("male", "Male")], id: \.0) { key, label in
+                    Section(japaneseUI ? "声" : "Voice") {
+                        ForEach([("female", japaneseUI ? "女性" : "Female"), ("male", japaneseUI ? "男性" : "Male")], id: \.0) { key, label in
                             Button { speaker.setVoice(key) } label: {
                                 if key == speaker.voice { Label(label, systemImage: "checkmark") } else { Text(label) }
                             }
                         }
                     }
                 } label: {
-                    Text(speaker.speed.label).font(.caption.weight(.semibold)).fixedSize()
+                    Text(speedLabel(speaker.speed)).font(.caption.weight(.semibold)).fixedSize()
                 }
                 Button { speaker.stop(); onClose() } label: { Image(systemName: "xmark") }
                     .foregroundStyle(.secondary)

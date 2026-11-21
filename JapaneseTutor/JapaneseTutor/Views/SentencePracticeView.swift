@@ -69,7 +69,7 @@ class SentencePracticeViewModel {
             if firstTry {
                 for use in result.words {
                     if let word = round.words.first(where: { $0.wordRomajiMacron.lowercased() == use.word.lowercased() }) {
-                        _ = try? await APIClient.shared.recordTestResult(id: word.id, correct: use.usedCorrectly)
+                        _ = try? await APIClient.shared.recordTestResult(id: word.id, correct: use.usedCorrectly, mode: "sentence")
                     }
                 }
             }

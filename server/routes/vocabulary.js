@@ -276,6 +276,43 @@ router.post('/:id/test', async (req, res, next) => {
     const docRef = snapshot.docs[0].ref;
     const word = snapshot.docs[0].data();
 
+    // The schedule lives in server/services/word-schedule.js: only recall
+    // (typed answer, own sentence) can make a word "known".
+    const { applyTestResult } = require('../services/word-schedule');
+    const change = applyTestResult(word, correct, String(req.body.mode || 'choice'));
+    const newStatus = change.status;
+    await docRef.update(change);
+
+    const updatedDoc = await docRef.get();
+    res.json(updatedDoc.data());
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/vocabulary/:id/test — record a test result
+router.post('/:id/test', async (req, res, next) => {
+  try {
+    const vocabId = parseInt(req.params.id);
+    const { correct } = req.body;
+
+    if (typeof correct !== 'boolean') {
+      return res.status(400).json({ error: 'Must provide "correct" (boolean)' });
+    }
+
+    const snapshot = await collections.vocabulary
+      .where('id', '==', vocabId)
+      .where('user_id', '==', req.userId)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return res.status(404).json({ error: 'Word not found' });
+    }
+
+    const docRef = snapshot.docs[0].ref;
+    const word = snapshot.docs[0].data();
+
     // Update test counters
     const newTimesTested = word.times_tested + 1;
     const newTimesCorrect = word.times_tested_correct + (correct ? 1 : 0);

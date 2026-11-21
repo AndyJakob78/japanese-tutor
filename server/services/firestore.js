@@ -28,6 +28,23 @@ const collections = {
   speechCache: firestore.collection('speech_cache'), // Read-aloud MP3 per sentence (cloud voice)
 };
 
+// --- Collections for the other learning languages (German, English) ---
+// Japanese keeps the collections above, untouched. Every other language gets
+// its own set with a suffix ("articles_de", "vocabulary_de", ...), so the data
+// of two languages can never mix. Device, trial and config stay shared.
+const langCollections = {};
+function collectionsFor(lang) {
+  if (!/^[a-z]{2}$/.test(lang) || lang === 'ja') throw new Error(`collectionsFor: not a separate language: ${lang}`);
+  if (!langCollections[lang]) {
+    langCollections[lang] = {
+      articles: firestore.collection(`articles_${lang}`),
+      vocabulary: firestore.collection(`vocabulary_${lang}`),
+      mistakes: firestore.collection(`mistakes_${lang}`),
+    };
+  }
+  return langCollections[lang];
+}
+
 // --- Auto-increment ID helper ---
 // Firestore doesn't have auto-increment, so we track counters manually.
 
@@ -88,4 +105,4 @@ async function initializeConfigForUser(userId) {
   await batch.commit();
 }
 
-module.exports = { firestore, collections, getNextId, initializeConfigForUser };
+module.exports = { firestore, collections, collectionsFor, getNextId, initializeConfigForUser };

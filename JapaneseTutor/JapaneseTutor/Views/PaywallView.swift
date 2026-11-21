@@ -1,4 +1,10 @@
 import SwiftUI
+
+/// English for the Japanese course, Japanese for the German / English courses
+/// (those learners are Japanese speakers).
+func L(_ english: String, _ japanese: String) -> String {
+    LearningLanguage.current == .japanese ? english : japanese
+}
 import RevenueCat
 
 struct PaywallView: View {
@@ -35,7 +41,7 @@ struct PaywallView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Not Now") { dismiss() }
+                    Button(L("Not Now", "あとで")) { dismiss() }
                         .foregroundStyle(.secondary)
                 }
             }
@@ -57,7 +63,7 @@ struct PaywallView: View {
             }
             .padding(.top, 40)
 
-            Text("Upgrade to Pro")
+            Text(L("Upgrade to Pro", "Proにアップグレード"))
                 .font(.title.weight(.bold))
 
             Text(subtitle)
@@ -72,11 +78,11 @@ struct PaywallView: View {
     private var subtitle: String {
         switch trialsRemaining {
         case .some(let left) where left > 0:
-            return "You have \(left) free \(left == 1 ? "article" : "articles") left.\nGo Pro for unlimited articles."
+            return L("You have \(left) free \(left == 1 ? "article" : "articles") left.\nGo Pro for unlimited articles.", "無料の記事はあと\(left)本です。\nProなら無制限に作成できます。")
         case .some:
-            return "You've used your free articles.\nUnlock unlimited generation to keep learning."
+            return L("You've used your free articles.\nUnlock unlimited generation to keep learning.", "無料の記事を使い切りました。\nProで学習を続けましょう。")
         case .none:
-            return "Unlock unlimited articles to keep learning."
+            return L("Unlock unlimited articles to keep learning.", "Proで記事を無制限に作成できます。")
         }
     }
 
@@ -84,10 +90,10 @@ struct PaywallView: View {
 
     private var featuresSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            featureRow(icon: "infinity",              color: .red,    title: "Unlimited articles",      subtitle: "Generate as many as you want, whenever you want")
-            featureRow(icon: "sparkles",              color: .orange, title: "Always fresh content",     subtitle: "New stories from real current events every day")
-            featureRow(icon: "character.book.closed", color: .blue,   title: "All writing systems",     subtitle: "Romaji, Hiragana, Kanji with furigana — switch anytime")
-            featureRow(icon: "checkmark.seal",        color: .green,  title: "Vocabulary tracking",     subtitle: "Spaced repetition keeps your words from slipping away")
+            featureRow(icon: "infinity",              color: .red,    title: L("Unlimited articles", "記事を無制限に"),      subtitle: L("Generate as many as you want, whenever you want", "好きなときに、好きなだけ記事を作成"))
+            featureRow(icon: "sparkles",              color: .orange, title: L("Always fresh content", "毎日新しい内容"),     subtitle: L("New stories from real current events every day", "実際の最新ニュースから毎日新しい記事"))
+            featureRow(icon: "character.book.closed", color: .blue,   title: L("All writing systems", "読み上げと文の練習"),     subtitle: L("Romaji, Hiragana, Kanji with furigana — switch anytime", "ネイティブの音声で聞き、自分で文を書いて添削"))
+            featureRow(icon: "checkmark.seal",        color: .green,  title: L("Vocabulary tracking", "単語の記録と復習"),     subtitle: L("Spaced repetition keeps your words from slipping away", "間隔をあけた復習で単語を忘れない"))
         }
         .padding(.horizontal, 24)
     }
@@ -114,14 +120,14 @@ struct PaywallView: View {
         VStack(spacing: 12) {
             planCard(
                 type: .annual,
-                title: "Annual",
+                title: L("Annual", "年額"),
                 price: annualPriceString,
                 detail: annualDetailString,
-                badge: "Save 27%"
+                badge: L("Save 27%", "27%お得")
             )
             planCard(
                 type: .monthly,
-                title: "Monthly",
+                title: L("Monthly", "月額"),
                 price: monthlyPriceString,
                 detail: nil,
                 badge: nil
@@ -235,22 +241,22 @@ struct PaywallView: View {
                 if isRestoring {
                     ProgressView()
                 } else {
-                    Text("Restore Purchases")
+                    Text(L("Restore Purchases", "購入を復元"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }
             .disabled(isPurchasing || isRestoring)
 
-            Text(selectedPlan == .annual ? "Cancel anytime. Billed annually." : "Cancel anytime. Billed monthly.")
+            Text(selectedPlan == .annual ? L("Cancel anytime. Billed annually.", "いつでも解約できます。年額でのお支払いです。") : L("Cancel anytime. Billed monthly.", "いつでも解約できます。月額でのお支払いです。"))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
 
             // Required by App Store: privacy policy + terms of use links
             HStack(spacing: 4) {
-                Link("Privacy Policy", destination: URL(string: "https://andyjakob78.github.io/japanese-tutor/privacy-policy.html")!)
+                Link(L("Privacy Policy", "プライバシーポリシー"), destination: URL(string: "https://andyjakob78.github.io/japanese-tutor/privacy-policy.html")!)
                 Text("·")
-                Link("Terms of Use", destination: URL(string: "https://andyjakob78.github.io/japanese-tutor/terms-of-use.html")!)
+                Link(L("Terms of Use", "利用規約"), destination: URL(string: "https://andyjakob78.github.io/japanese-tutor/terms-of-use.html")!)
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -260,9 +266,9 @@ struct PaywallView: View {
     private var subscribeButtonTitle: String {
         switch selectedPlan {
         case .monthly:
-            return "Subscribe — \(monthlyPriceString)"
+            return L("Subscribe — \(monthlyPriceString)", "登録する — \(monthlyPriceString)")
         case .annual:
-            return "Subscribe — \(annualPriceString)"
+            return L("Subscribe — \(annualPriceString)", "登録する — \(annualPriceString)")
         }
     }
 
@@ -281,7 +287,7 @@ struct PaywallView: View {
 
     private func handlePurchase() async {
         guard let package = (selectedPlan == .annual ? rc.annualPackage : rc.monthlyPackage) else {
-            errorMessage = "Product not available. Please try again later."
+            errorMessage = L("Product not available. Please try again later.", "商品を利用できません。あとでもう一度お試しください。")
             return
         }
 
@@ -295,7 +301,7 @@ struct PaywallView: View {
                 _ = try await APIClient.shared.upgradeDeviceToPro()
                 onUpgradeSuccess()
             } else {
-                errorMessage = "Purchase could not be verified. Please try again."
+                errorMessage = L("Purchase could not be verified. Please try again.", "購入を確認できませんでした。もう一度お試しください。")
             }
         } catch let error as RevenueCat.ErrorCode where error == .purchaseCancelledError {
             // User tapped Cancel on the Apple payment sheet — no error needed
@@ -318,7 +324,7 @@ struct PaywallView: View {
                 _ = try await APIClient.shared.upgradeDeviceToPro()
                 onUpgradeSuccess()
             } else {
-                errorMessage = "No active subscription found for this Apple ID."
+                errorMessage = L("No active subscription found for this Apple ID.", "このApple IDに有効なサブスクリプションが見つかりません。")
             }
         } catch {
             errorMessage = error.localizedDescription

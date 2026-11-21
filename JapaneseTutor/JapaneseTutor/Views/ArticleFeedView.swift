@@ -450,7 +450,7 @@ struct GenerateArticleSheet: View {
                 }
 
                 Section("New Words") {
-                    Stepper("\(newWordsCount) new words", value: $newWordsCount, in: 5...25)
+                    Stepper(newWordsCount == 0 ? "No new words (review only)" : "\(newWordsCount) new words", value: $newWordsCount, in: 0...25)
                 }
 
                 Section {
