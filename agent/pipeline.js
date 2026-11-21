@@ -13,9 +13,11 @@ const { callClaudeJSON, callClaudeSearchJSON } = require('../server/services/cla
 const { firestore, collections, getNextId } = require('../server/services/firestore');
 const { normalizeBody, normalizeWord } = require('./middleware/normalize');
 const { runQualityReviewer } = require('./middleware/quality-reviewer');
+const { lintArticle, lintDraft, summarize: summarizeLint } = require('./middleware/article-lint');
+const { fixStoredSpelling } = require('./middleware/spell-numbers');
 const { autoFixHallucinatedRomaji } = require('./middleware/wanakana-fix');
 const { convertScript, splitLongSentences } = require('./middleware/script-converter');
-const { applyProperNouns } = require('./middleware/proper-nouns');
+const { applyProperNouns, capitalizeKnownNames } = require('./middleware/proper-nouns');
 const { loadMistakes, summarizeWeakSpots, weakSpotsPrompt } = require('../server/services/mistakes');
 const { buildNumberCheatSheet } = require('./middleware/numbers-formatter');
 const { correctVocabLevels, lookupLevel } = require('./middleware/jlpt-levels');
@@ -966,6 +968,19 @@ For corporate actions and stances, prefer these N4–N5 verb choices that sound 
 
 Stick to the N4–N5–N3 swaps above. If the news story would normally use an N2 word, REWORD to stay within scope.
 
+## CRITICAL: A Story That Reads Well (found in #216–#219)
+- EVERY sentence is a full sentence with its own verb. Never a loose piece like 「テキサスのスターベースで。」 — put the place inside the sentence it belongs to.
+- Say each fact ONCE. Don't restate a fact in other words to fill space (#218 said "talk with characters to learn" three times; #217 said "the booster catch failed" three times). When the facts are few, use MORE facts from the source (who, when, where, how much, why, what happens next) — never the same fact again.
+- Order: what happened → the key details → background → what comes next. A background fact ("Los Angeles is the second-biggest city") goes with the other background, not in the middle of the event.
+- One time frame: don't write "will become mayor" and two sentences later "is the mayor". Say first what happened (won the election), then what will happen (starts on <date>).
+- If a result is mixed, say so in the first sentence (one part succeeded, one failed) — don't open with a bare "it succeeded".
+- No sentence about the article or its source ("The Japan Times wrote this news").
+- A government is 政府（せいふ）, never 「日本（にほん）の国（くに）は」. A city council member is 市（し）の議員（ぎいん）, a term of office is 一期（いっき）, not 一回（いっかい）.
+- Don't translate English word by word: "as a newcomer" is not 「新（あたら）しい人（ひと）として」 — say what happened (「はじめて市（し）の議員（ぎいん）になりました」).
+- A long English loanword that is not a name (デモクラティック・ソーシャリスト) is not simpler than the Japanese word — an N4 reader knows neither. Explain the idea in a few simple words instead.
+- Numbers: write the digit with its counter and NO extra reading in brackets: 26個（こ）の衛星（えいせい）, 33基（き）のエンジン — never 「26（にじゅうろく）の」. A bare number never counts things without a counter.
+- Verbs must fit: a rocket is 打（う）ち上（あ）げられます (or 出発（しゅっぱつ）します), engines are 失（うしな）われます/こわれます — not なくなります. "Could not catch" is the potential form (つかまえられませんでした), not "did not catch".
+
 ## CRITICAL: Word Count
 Aim for ${config.target_word_count || 200} ${writingSystem === 'romaji' ? 'words' : 'Japanese characters'} (±10%) — but the target is a MAXIMUM, never a reason to pad. When the source facts run out, stop: a shorter true article beats a longer one with filler. NEVER fill length with invented scenes, opinions, feelings, predictions or "It is important work"-type comments (#214 added "people open the factory door in the morning" to reach the count).
 IMPORTANT: [NEW] and [REVIEW] markers do NOT count as words. Count only the actual content words in the body.
@@ -1226,6 +1241,11 @@ Rules: ${wsPrompt.userRules}`;
   // convert title/summary/body to the user's preferred writing system using the
   // furigana as ground truth. This eliminates Class A romaji hallucinations.
   // Vocabulary fields are unchanged (Layer 2.5 already handled those).
+  // Code check, part 1 (see middleware/article-lint.js): long loanwords are
+  // easiest to see while the draft is still in katakana.
+  const draftFindings = userWritingSystem === 'romaji'
+    ? lintDraft(result.body_romaji, result.proper_nouns, w => convertScript(w, 'romaji'))
+    : [];
   if (userWritingSystem !== 'kanji') {
     console.log(`[Convert] kanji+furigana \u2192 ${userWritingSystem}`);
     if (result.title_romaji)   result.title_romaji   = convertScript(result.title_romaji,   userWritingSystem);
@@ -1315,8 +1335,12 @@ Rules: ${wsPrompt.userRules}`;
   // phonetic-slip real words (sekkai→sekai), gibberish phrases, and factual
   // drift from the source. See agent/middleware/quality-reviewer.js and
   // KNOWLEDGE_HUB.md "Quality Framework" section.
+  // Code check, part 2: what the program can see for certain goes to the
+  // reviewer as a must-fix list — inside the call that runs anyway.
+  const lintBefore = postWritingSystem === 'romaji' ? [...lintArticle(result, config), ...draftFindings] : [];
+  if (lintBefore.length) console.log(`[Lint] ${lintBefore.length} finding(s) for the reviewer: ${summarizeLint(lintBefore).join(' | ')}`);
   const bodyBeforeReview = result.body_romaji || '';
-  const { article: reviewed, fixesMade } = await runQualityReviewer(result, newsData, config);
+  const { article: reviewed, fixesMade } = await runQualityReviewer(result, newsData, config, lintBefore);
   result = reviewed;
   // The reviewer may delete unsupported sentences; their [NEW]/[REVIEW] words
   // must not be saved or quizzed (#214 dry run: mamoru, kankei went with them).
@@ -1346,6 +1370,17 @@ Rules: ${wsPrompt.userRules}`;
   if (result.title_romaji)   result.title_romaji   = stripAllMarkers(result.title_romaji);
   if (result.summary_romaji) result.summary_romaji = stripAllMarkers(result.summary_romaji);
 
+  // Code check, part 3: what is still there after the reviewer is saved with
+  // the article (lint_warnings), so repeat offenders show up in
+  // scripts/lint-articles.js instead of only on the reader's screen.
+  if (postWritingSystem === 'romaji') {
+    const lintAfter = lintArticle(result, config);
+    result._lint_warnings = summarizeLint(lintAfter);
+    console.log(lintAfter.length
+      ? `[Lint] ⚠️  ${lintAfter.length} finding(s) left after review: ${result._lint_warnings.join(' | ')}`
+      : `[Lint] ✅ clean after review (${lintBefore.length} found before)`);
+  }
+
   if (fixesMade.length > 0) {
     result._reviewer_fixes = fixesMade; // surfaced into article doc for telemetry
     // Re-measure word_count since reviewer may have changed body length.
@@ -1366,9 +1401,13 @@ Rules: ${wsPrompt.userRules}`;
 
 function applyNames(result) {
   const names = Array.isArray(result.proper_nouns) ? result.proper_nouns : [];
-  if (names.length === 0) return;
   for (const f of ['title_romaji', 'summary_romaji', 'body_romaji']) {
-    if (result[f]) result[f] = applyProperNouns(result[f], names);
+    if (!result[f]) continue;
+    if (names.length) result[f] = applyProperNouns(result[f], names);
+    // Built-in names (Nihon, Nihongo, Amerikajin…) and the spelling fixes the
+    // app also applies at display time ("Raman san" → "Raman-san", "heno" → "e no"),
+    // so the stored text is already right.
+    result[f] = fixStoredSpelling(capitalizeKnownNames(result[f]));
   }
 }
 
@@ -1959,6 +1998,8 @@ async function saveToDatabase(articleId, articleData, newsData, quiz, userId, co
     // Layer 2.5 (kana→romaji re-derivation). Useful for tracking which
     // vocab Claude keeps getting wrong.
     wanakana_fixes: articleData._wanakana_fixes || [],
+    // Code-check findings still present after the reviewer (article-lint.js).
+    lint_warnings: articleData._lint_warnings || [],
     created_at: new Date().toISOString(),
     read_at: null,
     quiz_completed_at: null,

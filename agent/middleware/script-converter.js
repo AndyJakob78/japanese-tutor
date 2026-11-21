@@ -193,7 +193,9 @@ function convertKanjiFuriganaToRomaji(text) {
   //     Match し+(ま|て|よ|な|え) (covers shimasu, shite, shiyō, shinai, shiete)
   //     and す+(る) (dictionary form), さ+(れ|せ) (passive/causative).
   //     EXCLUDES adjective endings like 新（あたら）しい (matches し but next char is い → no split).
-  out = out.replace(/）(し[まてよなえた])/g, '） $1');   // + した/したい (riyō shitai, 2026-11-11)
+  // …but not after a one-kanji す-verb stem: 出（だ）しました is "dashimashita", not
+  // "da shimashita" (the reviewer had to rejoin it in #217 and #219).
+  out = out.replace(/(?<![出話貸押消探渡直返示表指差刺残流回倒移写許試暮過落起下通壊干足正無離放殺]（[぀-ゟ]{1,4})）(し[まてよなえた])/g, '） $1');   // + した/したい (riyō shitai, 2026-11-11)
   out = out.replace(/）(する)/g, '） $1');
   out = out.replace(/）(さ[れせ])/g, '） $1');
   // (c) Particles after a kanji+furigana noun:
@@ -247,7 +249,8 @@ function convertKanjiFuriganaToRomaji(text) {
   //     katakana → hiragana: スタートします → "sutāto shimasu" (ー stays with its katakana)
   out = out.replace(/・/g, ' ');
   out = out.replace(/([ぁ-ゖ])([ァ-ヺ])/g, '$1 $2');
-  out = out.replace(/([ァ-ヺー])([一-鿿々])/g, '$1 $2');
+  // …but a suffix kanji stays on its word: アメリカ人（じん） → "amerikajin", アジア系（けい） → "ajiakei" (#219)
+  out = out.replace(/([ァ-ヺー])(?!(?:人（じん）|系（けい）|語（ご）|製（せい）|州（しゅう）|風（ふう）))([一-鿿々])/g, '$1 $2');
   out = out.replace(/([ァ-ヺー])([ぁ-ゖ])/g, '$1 $2');
 
   // (e4) ような / ように are "yō na" / "yō ni" (#211 "ie no yōna heya", #203):
@@ -318,12 +321,25 @@ function convertKanjiFuriganaToRomaji(text) {
   out = out.replace(/([ァ-ヺー])（[぀-ゟ゠-ヿー\s]+）/g, '$1');
   out = out.replace(/([%％])（[぀-ゟ゠-ヿー\s]+）/g, '$1');   // 9%（パーセント） → "9%" (read as pāsento later)
 
+  // A digit with its own reading, 26（にじゅうろく） → "26" (#217 showed "nijūroku(nijūroku)");
+  // counter kanji after a digit were already handled in fixDigitCounterReadings.
+  out = out.replace(/(\d)（[぀-ゟ]+）/g, '$1');
+
+  // Katakana name + honorific → hyphen: ラマンさん → "Raman-san" (#219 had "Raman san")
+  out = out.replace(/([ァ-ヺー]{2,}) ?(さん|さま|くん|ちゃん)(から|まで|です|でした|[はがをにのともへや])?(?![぀-ゟ])/g,
+    (m, name, hon, p) => `${name}-${hon}${p ? ' ' + (p === 'は' ? 'わ' : p) : ''}`);
+  // digit + particle: 33も → "33 mo"
+  out = out.replace(/(\d)([はがをも])(?=[぀-ゟ])/g, (m, d, p) => `${d} ${p === 'は' ? 'わ' : p} `);
+  out = out.replace(/(\d)([はがをもにのとへ])(?![぀-ゟ])/g, (m, d, p) => `${d} ${p === 'は' ? 'わ' : p}`);
+  out = out.replace(/([ァ-ヺー])(\d)/g, '$1 $2');
+
   // Step 0.9: Honorific after a name → hyphen: 赤沢（あかざわ）さん →
   // "Akazawa-san", not "akazawasan". Family words keep the glued form
   // (お父さん otōsan, 皆さん minasan). Only when the honorific ends the word.
-  out = out.replace(/([一-鿿々]+)（([぀-ゟ]+)）(さん|さま|くん|ちゃん)(?![぀-ゟ])/g,
-    (m, kanji, kana, hon) => (/^(父|母|兄|姉|皆|奥|爺|婆|叔父|叔母|伯父|伯母|祖父|祖母)$/.test(kanji)
-      ? m : `${kanji}（${kana}）-${hon}`));
+  out = out.replace(/([一-鿿々]+)（([぀-ゟ]+)）(さん|さま|くん|ちゃん)(から|まで|です|でした|[はがをにのともへや])?(?![぀-ゟ])/g,
+    (m, kanji, kana, hon, p) => (/^(父|母|兄|姉|皆|奥|爺|婆|叔父|叔母|伯父|伯母|祖父|祖母)$/.test(kanji)
+      ? `${kanji}（${kana}）${hon}${p ? ' ' + (p === 'は' ? 'わ' : p) : ''}`
+      : `${kanji}（${kana}）-${hon}${p ? ' ' + (p === 'は' ? 'わ' : p) : ''}`));
 
   // Step 1: Strip kanji, keep only the furigana kana.
   out = out.replace(/[一-鿿々]+（([぀-ゟ゠-ヿー]+)）/g, '$1');

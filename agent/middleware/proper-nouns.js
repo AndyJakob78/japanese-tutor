@@ -72,4 +72,24 @@ function rebuild(match, name) {
   return result;
 }
 
-module.exports = { applyProperNouns };
+// Names every article may use, whether or not the draft listed them: countries,
+// regions, languages, nationalities. "nihon ni", "nihongo wo", "ajia kei
+// Amerika jin" came out lowercase or split (#216, #218, #219).
+const PLACES = ['Nihon', 'Amerika', 'Ajia', 'Yōroppa', 'Afurika', 'Chūgoku', 'Kankoku', 'Kitachōsen', 'Taiwan', 'Roshia', 'Ukuraina',
+  'Doitsu', 'Furansu', 'Igirisu', 'Itaria', 'Supein', 'Oranda', 'Suisu', 'Indo', 'Betonamu', 'Tai', 'Firipin', 'Indoneshia',
+  'Ōsutoraria', 'Kanada', 'Mekishiko', 'Burajiru', 'Isuraeru', 'Iran', 'Toruko', 'Ejiputo'];
+const SHORT_OK = new Set(['Tai']);   // too short / too word-like to add suffix-less
+const BUILTIN_NAMES = [
+  ...PLACES.filter(p => !SHORT_OK.has(p)).map(p => ({ romaji: p })),
+  ...PLACES.map(p => ({ romaji: `${p}jin` })),
+  ...PLACES.filter(p => !SHORT_OK.has(p)).map(p => ({ romaji: `${p}-kei` })),
+  ...['Nihongo', 'Eigo', 'Chūgokugo', 'Kankokugo', 'Doitsugo', 'Furansugo', 'Supeingo', 'Roshiago', 'Itariago'].map(r => ({ romaji: r })),
+  ...['Tōkyō', 'Ōsaka', 'Kyōto', 'Hokkaidō', 'Okinawa', 'Nyūyōku', 'Washinton', 'Rondon', 'Pekin', 'Mosukuwa'].map(r => ({ romaji: r })),
+];
+
+/** Capitals (and joined suffixes) for the built-in names above. */
+function capitalizeKnownNames(text) {
+  return applyProperNouns(text, BUILTIN_NAMES);
+}
+
+module.exports = { applyProperNouns, capitalizeKnownNames };

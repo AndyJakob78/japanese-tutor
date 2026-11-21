@@ -19,6 +19,7 @@
 
 const { callClaude, callClaudeJSON } = require('../../server/services/claude');
 const { buildNumberCheatSheet } = require('./numbers-formatter');
+const { formatForReviewer } = require('./article-lint');
 
 function buildReviewerSystemPrompt(writingSystem) {
   const scriptLabel = writingSystem === 'kana'
@@ -456,7 +457,7 @@ If a sentence is half true, cut it back to the true half using only words alread
 
 ═══════════════════════════════════════════════════════════════════════
 ## What NOT to change
-- Article length (keep within ±10% words) — EXCEPT deleting unsupported sentences (above); a shorter true article is the goal
+- Article length (keep within ±10% words) — EXCEPT deleting unsupported or repeated sentences; a shorter true article is the goal
 - [NEW] and [REVIEW] markers — preserve EXACT positions
 - Vocabulary word_kana / word_kanji fields — those came from a strong source
 - Topic, storyline, structure
@@ -485,7 +486,7 @@ If you make ANY fix, list it in fixes_made — terse, "from → to (reason)", at
 newWords_fixes is for vocab-entry romaji corrections (index = 0-based in newWords array).`;
 }
 
-async function runQualityReviewer(article, newsData, config) {
+async function runQualityReviewer(article, newsData, config, lintFindings = []) {
   const writingSystem = article._writing_system || config.writing_system || 'romaji';
   console.log('[Reviewer] Running Japanese quality reviewer pass...');
 
@@ -516,6 +517,7 @@ ${quotes}`;
     .join('\n');
 
   const numberCheatSheet = buildNumberCheatSheet(newsData);
+  const lintBlock = formatForReviewer(lintFindings);
 
   const userPrompt = `## 🎯 USER LEVEL: ${config.proficiency_level}
 This is the HARD ceiling for BOTH vocabulary and grammar. Nothing in the article — words or grammar structures — may exceed ${config.proficiency_level}. (Loanwords in katakana are level-exempt.)
@@ -543,7 +545,7 @@ ${article.translation_en || '(none)'}
 
 ## Current vocabulary (newWords array)
 ${newWordsForReview || '(none)'}
-
+${lintBlock ? `\n${lintBlock}\n` : ''}
 ═══════════════════════════════════════════════════════════════════════
 ## Your task
 Review the article against your 17 error categories. Apply the ANTI-INVENTION GUARDRAILS — but rule #7: objective spelling errors MUST be fixed.
@@ -566,6 +568,8 @@ Specific checks for THIS article:
    Also (#216): **missing verb** — "kādo wo [NEW] tsuzukemasu" (continues cards) → "kādo wo tsukuri [NEW] tsuzukemasu" (the marker stays right before ITS word); **English calques** a Japanese writer wouldn't use — "gurūpu no yunitto" (unit) → "gurūpu no kaisha" / "kogaisha"; **"tsumari"** only when the sentence really restates the one before, never as a filler; **fuzzy stand-ins** — "sono hito ka dōka mimasu" → "honnin ka dōka kakunin shimasu" (checks it's really you). Short fixes inside the sentence, no new facts.
 
 13. **Source check** (✂️ section): read translation_en sentence by sentence against the source news. Delete every quote, scene, opinion or prediction the source doesn't support, and update translation_en to match.
+
+15. **Reads well** (#216–#219): (a) every sentence is a full sentence — join a loose piece ("Tekisasu no Sutābēsu de.") to its neighbour; (b) the same fact said twice or three times → keep the clearest sentence, delete the others (allowed deletion); (c) one time frame — not "shichō ni narimasu" and later "shichō desu" for the same moment; (d) a background fact standing in the middle of the event → move it next to the other background; (e) a sentence about the source or the article itself → delete; (f) a potential is needed where something was tried and failed ("tsukamaemasen deshita" → "tsukamaeraremasen deshita"). Move and delete only — no new facts.
 
 14. **Faithful translation**: translation_en must say what the romaji says — no added words ("better services" when the body only says "sābisu"), no meaning the Japanese doesn't carry. Fix the English (or the Japanese, if the Japanese is the broken one) so they match.
 

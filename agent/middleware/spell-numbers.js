@@ -76,6 +76,14 @@ const COUNTERS = {
   nen:     { suffix: 'nen', forms: { 4: 'yonen', 9: 'kyūnen' } },
   nenkan:  { suffix: 'nenkan', forms: { 4: 'yonenkan', 9: 'kyūnenkan' } },
   gō:      { suffix: 'gō' },
+  gōki:    { suffix: 'gōki' },
+  gōsha:   { suffix: 'gōsha' },
+  nichikan: { suffix: 'nichikan', forms: { 4: 'yokkakan' } },
+  byō:     { suffix: 'byō' },
+  sha:     { suffix: 'sha', forms: { 1: 'issha', 8: 'hassha', 'jū': 'jussha' } },
+  shurui:  { suffix: 'shurui', forms: { 1: 'isshurui', 8: 'hasshurui', 'jū': 'jusshurui' } },
+  ki:      { suffix: 'ki', forms: geminateK('ki') },
+  kasho:   { suffix: 'kasho', forms: geminateK('kasho') },
   chō:     { suffix: 'chō' },
   ji:      { suffix: 'ji', forms: { 4: 'yoji', 7: 'shichiji', 9: 'kuji' }, max: 24 },
   jikan:   { suffix: 'jikan', forms: { 4: 'yojikan', 9: 'kujikan' } },
@@ -138,7 +146,8 @@ const NUM_RE = new RegExp(
   // a digit run (with optional thousands commas / decimal part) not glued to a
   // letter on the left, optionally followed by a counter or unit
   `(?<![A-Za-zāīūēō0-9.,:])(\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.(\\d+))?` +
-  `(?:([\\s-]?)(${COUNTER_RE})(?![a-zāīūēō])|\\s?(%)|([\\s-]?)(${UNIT_RE})(?![a-zāīūēō]))?` +
+  // counter may carry the ordinal "me": 44ninme → yonjūyoninme (#219)
+  `(?:([\\s-]?)(${COUNTER_RE})(me)?(?![a-zāīūēō])|\\s?(%)|([\\s-]?)(${UNIT_RE})(?![a-zāīūēō]))?` +
   `(?![A-Za-zāīūēō0-9:])`,
   'gi'
 );
@@ -153,16 +162,32 @@ const DIGIT_NATIVE_RE = /(?<![A-Za-zāīūēō0-9.,:])(10|[1-9])[\s-]?((?:hito|f
 // (the main pass reads the result). Plain "6man" is left to the man counter.
 const MAN_OKU_RE = /(?<![A-Za-zāīūēō0-9.,:])(?:(\d{1,4})oku)?(?:(\d{1,4})man)?(\d{1,4})?(?!\d|man|oku)/g;
 
+// "26(nijūroku)": the writer gave the digit AND its reading (#217). Keep the digit.
+const DIGIT_READING_RE = /(?<![A-Za-zāīūēō0-9.,:])(\d{1,3}(?:,\d{3})+|\d+)\s?\(([^)\d]{1,40})\)/g;
+function dropDigitReadings(text) {
+  return text.replace(DIGIT_READING_RE, (m, digits, inner) => {
+    const n = Number(digits.replace(/,/g, ''));
+    if (!Number.isSafeInteger(n) || n >= 1e12) return m;
+    return foldLetters(inner) === foldLetters(readNumber(n).words.join('')) ? digits : m;
+  });
+}
+
+// A digit run glued to a lowercase word no counter rule knows ("16gōki" before
+// the rule existed, "3shurui"): read the number plainly and keep the word, so
+// the learner never sees a digit they can't read. Needs a vowel and 2+ letters,
+// so 5G, 4k, 100km, 24h, 1st, 2in1 stay as they are.
+const GLUED_FALLBACK_RE = /(?<![A-Za-zāīūēō0-9.,:])(\d+)([a-zāīūēō]{2,})(?![A-Za-zāīūēō0-9])/g;
+
 function spellOutNumbers(text) {
   if (!text || typeof text !== 'string') return text;
-  let out = text
+  let out = dropDigitReadings(text)
     .replace(DIGIT_NATIVE_RE, (match, digits, word) =>
       word.toLowerCase().startsWith(NATIVE[digits]) || DAYS[digits] === word.toLowerCase() ? word : match)
     .replace(MAN_OKU_RE, (match, oku, man, rest) => {
       if ([oku, man, rest].filter(Boolean).length < 2) return match;
       return String(Number(oku || 0) * 1e8 + Number(man || 0) * 1e4 + Number(rest || 0));
     });
-  out = out.replace(NUM_RE, (match, intPart, decimals, sep, counter, pct, _s, unit, offset, whole) => {
+  out = out.replace(NUM_RE, (match, intPart, decimals, sep, counter, me, pct, _s, unit, offset, whole) => {
     const n = Number(intPart.replace(/,/g, ''));
     if (!Number.isSafeInteger(n) || n >= 1e12) return match;
     const decimalWords = decimals ? ' ten ' + [...decimals].map(d => d === '0' ? 'zero' : ONES[d]).join(' ') : '';
@@ -173,15 +198,26 @@ function spellOutNumbers(text) {
     if (counter) {
       if (decimals) return match;
       const rule = COUNTERS[counter.toLowerCase()];
-      if (rule.max && (n < 1 || n > rule.max)) return match;
+      if (rule.max && (n < 1 || n > rule.max)) {
+        // "100nichi" is a count of days, not a date: hyakunichi (#219)
+        if (rule === DAY_RULE && counter.toLowerCase() === 'nichi' && n > 31) return readNumber(n).words.join(' ') + 'nichi' + (me || '');
+        return match;
+      }
       // a day number right after "...gatsu" is a date (tsuitachi), else a count (ichinichi)
       const isDate = /gatsu\s*$/i.test(whole.slice(0, offset));
-      return readWithCounter(n, rule, isDate);
+      return readWithCounter(n, rule, isDate) + (me || '');
     }
     const plain = readNumber(n).words.join(' ') + decimalWords;
     if (pct) return plain + ' pāsento';
     if (unit) return plain + ' ' + unit;
     return plain;
+  });
+  out = out.replace(GLUED_FALLBACK_RE, (match, digits, word) => {
+    const n = Number(digits);
+    if (!Number.isSafeInteger(n) || n >= 1e12 || !/[aiueoāīūēō]/.test(word) || /^(st|nd|rd|th)$/.test(word)) return match;
+    const words = readNumber(n).words;
+    const lastWord = words[words.length - 1];
+    return [...words.slice(0, -1), lastWord + (/n$/.test(lastWord) && /^[aeiouāīūēō]/.test(word) ? "'" : '') + word].join(' ');
   });
   // numbers that started a sentence: "2026nen wa" → "Nisen nijūrokunen wa"
   out = out.replace(/((?:^|[.!?]\s+)(?:\[(?:NEW|REVIEW)\]\s+)?)([a-zāīūēō])(?![A-Z])/g, (m, pre, ch) => pre + ch.toUpperCase());
@@ -189,6 +225,7 @@ function spellOutNumbers(text) {
 }
 
 const { romanizeGrammarPoint } = require('./grammar-romaji');
+const { capitalizeKnownNames } = require('./proper-nouns');
 
 const QUIZ_FIELDS = ['question_romaji', 'correct_answer', 'hint', 'explanation'];
 
@@ -213,6 +250,9 @@ function fixStoredSpelling(text) {
     // honorific glued to a name: "Akazawasan" → "Akazawa-san" (not shisan, otōsan …)
     .replace(/(^|[^A-Za-zāīūēō-])([A-Z][a-zāīūēō]{2,}?)(san|sama|kun|chan)(?![A-Za-zāīūēō])/g,
       (m, pre, name, hon) => (SAN_WORDS.has((name + hon).toLowerCase()) ? m : `${pre}${name}-${hon}`))
+    // honorific as its own word after a name: "Raman san wa" → "Raman-san wa" (#219).
+    // Only before a particle or punctuation, so "san" the number is never touched.
+    .replace(/(?<![A-Za-zāīūēō-])([A-Z][A-Za-zāīūēō]+) (san|sama|kun|chan)(?=[.,!?]| (?:wa|ga|no|wo|ni|to|mo|ya|e|de|kara|made|desu|deshita)(?![A-Za-zāīūēō])|$)/g, '$1-$2')
     .replace(/([Vv])y([aieo])/g, '$1$2')
     .replace(/([Vv])u([aeo])/g, '$1$2')
     .replace(/(^|[^A-Za-zāīūēō])(no)?yō(na|ni)(?![A-Za-zāīūēō])/g, (m, pre, no, end) => `${pre}${no ? 'no ' : ''}yō ${end}`)
@@ -242,7 +282,7 @@ const matchCase = (word, like) => (like[0] === like[0].toUpperCase() ? word[0].t
 function spellOutArticle(article) {
   if (!article || (article.writing_system && article.writing_system !== 'romaji')) return article;
   const out = { ...article };
-  for (const f of ['title_romaji', 'summary_romaji', 'body_romaji']) out[f] = spellOutNumbers(fixStoredSpelling(out[f]));
+  for (const f of ['title_romaji', 'summary_romaji', 'body_romaji']) out[f] = spellOutNumbers(fixStoredSpelling(capitalizeKnownNames(out[f])));
   // Grammar points come from the kanji-first draft (see grammar-romaji.js)
   if (Array.isArray(out.grammar_points)) out.grammar_points = out.grammar_points.map(romanizeGrammarPoint);
   if (Array.isArray(out.quiz_questions)) {
@@ -263,4 +303,4 @@ function spellOutQuestion(q) {
   return c;
 }
 
-module.exports = { spellOutNumbers, spellOutArticle, spellOutQuestion, _internals: { readNumber, readWithCounter, fixStoredSpelling } };
+module.exports = { spellOutNumbers, spellOutArticle, spellOutQuestion, fixStoredSpelling, _internals: { readNumber, readWithCounter, fixStoredSpelling, dropDigitReadings } };
