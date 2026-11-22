@@ -38,13 +38,20 @@ async function startApp({ pro = false, used = 0 } = {}) {
   const cols = { de: mk(), en: mk() };
   const ids = { de: 0, en: 0 };
   const stores = {};
-  const state = { generated: 0, incremented: 0 };
+  const state = { generated: 0, incremented: 0, settings: {}, requests: [], progress: {} };
   const app = express();
   app.use(express.json());
   app.use('/api', (req, res, next) => { req.userId = req.headers['x-user-id']; next(); });
   app.use('/api', createMiddleware({
     storeFor: lang => (stores[lang] ||= createStore(cols[lang], async () => ++ids[lang])),
-    generateArticle: async (userId, lang) => { state.generated++; return pipelineOutput(lang); },
+    generateArticle: async (userId, lang, opts) => { state.generated++; state.requests.push(opts); return pipelineOutput(lang); },
+    progress: {
+      bump: async (req, lang, counts) => { const k = `${req.userId}|${lang}`; const d = (state.progress[k] ||= { days: { today: {} } }).days.today; for (const [kind, n] of Object.entries(counts)) if (n) d[kind] = (d[kind] || 0) + n; },
+      load: async (userId, lang) => { const r = state.progress[`${userId}|${lang}`]; return r ? { days: { [new Date().toISOString().slice(0, 10)]: r.days.today }, ...r.extra } : {}; },
+      save: async (userId, lang, patch) => { (state.progress[`${userId}|${lang}`] ||= { days: { today: {} } }).extra = patch; },
+      tz: () => 0,
+    },
+    settings: { load: async (userId, lang) => state.settings[`${userId}|${lang}`] || {}, save: async (userId, lang, stored) => { state.settings[`${userId}|${lang}`] = stored; } },
     trial: { check: async () => ({ allowed: pro || used < 3, isPro: pro, generationCount: used }), increment: async () => { state.incremented++; }, limit: 3 },
     // stand-ins for the voice service and the Claude calls
     speech: { sentencesOf: a => a.body.replace(/\[NEW\] /g, '').split(/(?<=\.)\s+/), sentenceAudio: async (text, lang, voice) => Buffer.from(`mp3:${lang}:${voice}:${text}`) },
@@ -56,9 +63,9 @@ async function startApp({ pro = false, used = 0 } = {}) {
   }));
   app.use('/api', (req, res) => res.json({ japanese: true, path: req.path })); // stands in for the existing Japanese routes
   const server = await new Promise(r => { const s = app.listen(0, () => r(s)); });
-  const call = async (method, path, { lang, user = 'user-A', body } = {}) => {
+  const call = async (method, path, { lang, user = 'user-A', body, api } = {}) => {
     const res = await fetch(`http://127.0.0.1:${server.address().port}/api${path}`, {
-      method, headers: { 'x-user-id': user, 'content-type': 'application/json', ...(lang ? { 'x-learning-language': lang } : {}) },
+      method, headers: { 'x-user-id': user, 'content-type': 'application/json', ...(lang ? { 'x-learning-language': lang } : {}), ...(api ? { 'x-client-api': String(api) } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
     return { status: res.status, json: await res.json() };
@@ -119,7 +126,7 @@ test('German: generate, list, read, quiz, word list — and nothing leaks to Eng
     assert.strictEqual(words[0].times_seen, 2);
 
     // deleting an article keeps the word list
-    assert.deepStrictEqual((await app.call('DELETE', '/articles/1', { lang: 'de' })).json, { deleted: true });
+    assert.strictEqual((await app.call('DELETE', '/articles/1', { lang: 'de' })).json.deleted, true);
     assert.strictEqual((await app.call('GET', '/articles', { lang: 'de' })).json.pagination.total, 1);
     assert.strictEqual((await app.call('GET', '/vocabulary', { lang: 'de' })).json.vocabulary.length, 1);
   } finally { app.close(); }
@@ -248,4 +255,177 @@ test('review schedule and answer parts (pure logic)', () => {
     { base: 'notdue', status: 'known', times_tested: 3, streak_correct: 2, next_review_at: new Date(now + 864e5).toISOString(), last_tested_at: old },
   ], 10, now).map(x => x.base);
   assert.deepStrictEqual(picked, ['due', 'missed', 'new']);
+});
+
+
+// ---------- app 1.6+: German / English answered in the shape of the Japanese API ----------
+const v2 = { lang: 'de', api: 2 };
+
+test('1.6 shape: article, list, quiz and word list read like the Japanese API', async () => {
+  const app = await startApp();
+  try {
+    const made = await app.call('POST', '/articles/generate', { ...v2, body: { proficiency_level: 'B1', new_words_per_article: 5, target_word_count: 150, custom_topic: 'sport' } });
+    assert.strictEqual(made.status, 201);
+    assert.deepStrictEqual(app.state.requests[0], { request: { proficiency_level: 'B1', new_words_per_article: 5, target_word_count: 150, custom_topic: 'sport' }, topic: 'sport' });
+    const a = made.json;
+    assert.strictEqual(a.title_romaji, 'Titel');
+    assert.strictEqual(a.body_romaji, 'Die [NEW] Regierung plant etwas.');
+    assert.strictEqual(a.translation_en, '政府は何かを計画しています。');
+    assert.strictEqual(a.writing_system, 'romaji');
+    assert.deepStrictEqual(a.grammar_points, [{ pattern: 'Präsens', level: 'A1-A2', explanation: '現在形です。', examples: ['Die Regierung plant etwas.'] }]);
+    assert.deepStrictEqual(a.sources, [{ name: 's', url: 'u' }]);
+    const w = a.vocabulary[0];
+    assert.strictEqual(w.id, 1);                                   // a whole number, like Japanese word ids
+    assert.strictEqual(w.word_romaji_macron, 'die Regierung, -en'); // dictionary form
+    assert.strictEqual(w.word_romaji, 'Regierung');                 // as written in the text
+    assert.strictEqual(w.meaning_en, '政府');
+    assert.strictEqual(w.is_new, 1);
+    assert.strictEqual(w.status, 'new');
+    assert.strictEqual(a._draft, undefined);
+
+    const list = (await app.call('GET', '/articles', v2)).json;
+    assert.strictEqual(list.articles[0].title_romaji, 'Titel');
+    assert.strictEqual(list.pagination.total, 1);
+    assert.deepStrictEqual((await app.call('PATCH', '/articles/1', { ...v2, body: { read_at: true } })).json, { updated: true });
+
+    const quiz = (await app.call('GET', '/articles/1/quiz', v2)).json;
+    assert.strictEqual(quiz.article_title, 'Titel');
+    assert.strictEqual(quiz.questions.length, 4);
+    assert.deepStrictEqual({ id: quiz.questions[1].id, q: quiz.questions[1].question_romaji, en: quiz.questions[1].question_en, right: quiz.questions[1].correct_answer, wrong: quiz.questions[1].distractors },
+      { id: 2, q: 'Q1', en: '選んでください。', right: 'b', wrong: ['a', 'c', 'd'] });
+    const result = (await app.call('POST', '/articles/1/quiz', { ...v2, body: { answers: [{ question_id: 1, answer: 'a' }, { question_id: 2, answer: 'B' }, { question_id: 3, answer: 'a' }, { question_id: 4, answer: 'd' }] } })).json;
+    assert.deepStrictEqual(result.score, { correct: 3, total: 4, percentage: 75 });
+    assert.deepStrictEqual(result.results[2], { question_id: 3, correct: false, your_answer: 'a', correct_answer: 'c', hint: '説明' });
+    assert.strictEqual((await app.call('GET', '/articles/1', v2)).json.quiz_score, 0.75);   // the Japanese screens read 0-1
+
+    const words = (await app.call('GET', '/vocabulary?limit=50&offset=0', v2)).json;
+    assert.strictEqual(words.total, 1);
+    assert.strictEqual(words.vocabulary[0].word_romaji_macron, 'die Regierung, -en');
+    assert.strictEqual((await app.call('GET', '/vocabulary?status=known', v2)).json.total, 0);
+
+    // app 1.5 (no X-Client-Api) still gets its own shape from the same data
+    const old = (await app.call('GET', '/articles/1', { lang: 'de' })).json;
+    assert.strictEqual(old.title, 'Titel');
+    assert.strictEqual(old.title_romaji, undefined);
+    assert.strictEqual((await app.call('GET', '/config', { lang: 'de' })).json.japanese, true);
+    // and Japanese is untouched whatever the app version
+    assert.strictEqual((await app.call('GET', '/articles', { lang: 'ja', api: 2 })).json.japanese, true);
+    assert.strictEqual((await app.call('GET', '/config', { api: 2 })).json.japanese, true);
+    assert.strictEqual((await app.call('GET', '/device/status', v2)).json.japanese, true);
+  } finally { app.close(); }
+});
+
+test('1.6 shape: tests by word number — only typed answers and own sentences make a word known', async () => {
+  const app = await startApp();
+  try {
+    await app.call('POST', '/articles/generate', v2);
+    const review = (await app.call('GET', '/vocabulary/review?limit=10', v2)).json;
+    assert.strictEqual(review.words[0].id, 1);
+    assert.deepStrictEqual(review.also_accept, {});
+    // multiple choice: counted, never promotes
+    for (let i = 0; i < 3; i++) await app.call('POST', '/vocabulary/1/test', { ...v2, body: { correct: true, mode: 'choice' } });
+    let w = (await app.call('GET', '/vocabulary', v2)).json.vocabulary[0];
+    assert.deepStrictEqual([w.status, w.times_tested, w.streak_correct], ['learning', 3, 3]);
+    // typed: recall on one day is not enough yet (two different days are needed)
+    const typed = (await app.call('POST', '/vocabulary/1/test', { ...v2, body: { correct: true, mode: 'typed' } })).json;
+    assert.strictEqual(typed.word.status, 'learning');
+    assert.strictEqual(typeof typed.statusChanged, 'boolean');
+    const stats = (await app.call('GET', '/stats', v2)).json;
+    assert.deepStrictEqual(stats.vocabulary.recall, { tested: 1, correct: 1, percent: 100 });
+    assert.deepStrictEqual(stats.vocabulary.choice, { tested: 3, correct: 3, percent: 100 });
+    assert.ok(Array.isArray(stats.vocabulary.byLevel));
+    assert.strictEqual(stats.vocabulary.byStatus.learning, 1);
+
+    assert.strictEqual((await app.call('PATCH', '/vocabulary/1', { ...v2, body: { status: 'known' } })).json.status, 'known');
+    assert.strictEqual((await app.call('POST', '/vocabulary/99/test', { ...v2, body: { correct: true } })).status, 404);
+    assert.strictEqual((await app.call('POST', '/vocabulary/1/test', { ...v2, user: 'user-B', body: { correct: true } })).status, 404);
+
+    // a tapped word: looked up, added, numbered after the existing ones
+    const look = (await app.call('POST', '/practice/lookup', { ...v2, body: { word: 'Haus', sentence: 'Das Haus ist alt.' } })).json;
+    assert.deepStrictEqual([look.word_romaji_macron, look.meaning_en, look.vocabulary_id, look.part_of_speech], ['das Haus', '意味', null, 'noun']);
+    const added = await app.call('POST', '/vocabulary', { ...v2, body: { word_romaji_macron: look.word_romaji_macron, meaning_en: look.meaning_en, part_of_speech: 'noun', article_id: 1, context_sentence: 'Das Haus ist alt.' } });
+    assert.deepStrictEqual([added.status, added.json.id, added.json.context_sentence], [201, 2, 'Das Haus ist alt.']);
+    assert.strictEqual((await app.call('POST', '/practice/lookup', { ...v2, body: { word: 'Haus' } })).json.vocabulary_id, 2);
+
+    // the sentence check answers with "english" too (the name the shared screen reads)
+    const check = (await app.call('POST', '/practice/sentence', { ...v2, body: { words: [{ word: 'der Hund', meaning: '犬' }], sentence: 'Ich sehe der Hund.' } })).json;
+    assert.strictEqual(check.english, '私は犬を見ます。');
+    assert.strictEqual((await app.call('GET', '/practice/mistakes', v2)).json.weak_spots[0].pattern, 'der → den (akkusativ)');
+
+    // deleting an article with its words removes only the words first met there
+    const gone = (await app.call('DELETE', '/articles/1?delete_vocabulary=true', v2)).json;
+    assert.deepStrictEqual([gone.deleted, gone.vocabulary_deleted_count], [true, 2]);
+    assert.strictEqual((await app.call('GET', '/vocabulary', v2)).json.total, 0);
+  } finally { app.close(); }
+});
+
+test('1.6 settings: one set per language, level-bound values follow the level until changed', async () => {
+  const app = await startApp();
+  try {
+    const first = (await app.call('GET', '/config', v2)).json;
+    assert.deepStrictEqual([first.proficiency_level, first.target_word_count, first.max_sentence_length, first.new_words_per_article, first.quiz_questions_count, first.writing_system],
+      ['A1-A2', 100, 14, 8, 6, 'romaji']);
+    assert.strictEqual(first.topics.length, 5);
+    // "Save" sends every value; only the level was changed → length and sentence length move with it
+    const b2 = (await app.call('PUT', '/config', { ...v2, body: { ...first, proficiency_level: 'B2' } })).json;
+    assert.deepStrictEqual([b2.proficiency_level, b2.target_word_count, b2.max_sentence_length, b2.new_words_per_article], ['B2', 250, 30, 10]);
+    // an own value stays when the level changes again
+    const own = (await app.call('PUT', '/config', { ...v2, body: { ...b2, new_words_per_article: 0, topics: ['Sport', 'sport', ' Musik '], regions: ['Bayern'] } })).json;
+    assert.deepStrictEqual([own.new_words_per_article, own.topics, own.regions], [0, ['sport', 'musik'], ['bayern']]);
+    const b1 = (await app.call('PUT', '/config', { ...v2, body: { ...own, proficiency_level: 'B1' } })).json;
+    assert.deepStrictEqual([b1.proficiency_level, b1.new_words_per_article, b1.target_word_count], ['B1', 0, 150]);
+    // English keeps its own settings; another user too
+    assert.strictEqual((await app.call('GET', '/config', { lang: 'en', api: 2 })).json.proficiency_level, 'A1-A2');
+    assert.strictEqual((await app.call('GET', '/config', { ...v2, user: 'user-B' })).json.proficiency_level, 'A1-A2');
+    assert.strictEqual((await app.call('PUT', '/config', { ...v2, body: { proficiency_level: 'N3' } })).status, 400);
+  } finally { app.close(); }
+});
+
+test('1.6 settings: what one article is written with (pure)', () => {
+  const { effective } = require('../multilang/settings');
+  const { withRules } = require('../multilang/generate');
+  const de = require('../multilang/languages/de');
+  // nothing set: exactly the level's own numbers — the prompts are the ones that were tested
+  const plain = effective(de, {});
+  assert.deepStrictEqual(plain, { level: 'A1-A2', topics: plain.topics, regions: [], days: 10, rules: { words: 110, maxWords: 14, newWords: [4, 8], quizCount: 6, reviewCount: 3 } });
+  assert.strictEqual(withRules(de, 'A1-A2', plain.rules).levels['A1-A2'].rules, de.levels['A1-A2'].rules);
+  // the form passes the shown settings on: that is not a wish
+  assert.deepStrictEqual(effective(de, {}, { proficiency_level: 'B1', new_words_per_article: 8, target_word_count: 100 }).rules, { words: 170, maxWords: 22, newWords: [5, 9], quizCount: 6, reviewCount: 3 });
+  // a real wish in the form, and zero new words
+  const wish = effective(de, { max_sentence_length: 10, reuse_ratio: 0.9, news_timeframe_hours: 36, quiz_questions_count: 9 }, { new_words_per_article: 0, target_word_count: 300 });
+  assert.deepStrictEqual([wish.days, wish.rules], [2, { words: 300, maxWords: 10, newWords: [0, 0], quizCount: 9, reviewCount: 9 }]);
+  assert.match(withRules(de, 'A1-A2', wish.rules).levels['A1-A2'].rules, /NO sentence longer than 10 words/);
+  assert.deepStrictEqual(effective(de, { new_words_per_article: 12 }).rules.newWords, [9, 12]);
+});
+
+
+test('1.6 progress: activity is recorded per language and day, and the screen data comes back', async () => {
+  const app = await startApp();
+  try {
+    await app.call('POST', '/articles/generate', v2);
+    const empty = (await app.call('GET', '/progress', v2)).json;
+    assert.deepStrictEqual([empty.level, empty.next_level, empty.progress.total, empty.streak.current], ['A1-A2', 'B1', 1300, 0]);
+    assert.deepStrictEqual([empty.next_action.kind, empty.next_action.article_id], ['read', 1]);   // an unread article is waiting
+    assert.strictEqual(empty.save, undefined);                                                     // internal, never sent
+
+    await app.call('PATCH', '/articles/1', { ...v2, body: { read_at: true } });
+    await app.call('PATCH', '/articles/1', { ...v2, body: { read_at: true } });                    // opening it again does not count twice
+    await app.call('POST', '/vocabulary/1/test', { ...v2, body: { correct: true, mode: 'typed' } });
+    await app.call('POST', '/vocabulary/1/test', { ...v2, body: { correct: false, mode: 'typed' } });
+    await app.call('POST', '/vocabulary/1/test', { ...v2, body: { correct: true, mode: 'choice' } });
+    await app.call('POST', '/practice/sentence', { ...v2, body: { words: [{ word: 'Hund', meaning: '犬' }], sentence: 'Ich sehe den Hund.' } });
+    await app.call('POST', '/practice/sentence', { ...v2, body: { words: [{ word: 'Hund', meaning: '犬' }], sentence: 'Ich sehe den Hund.', first_try: false } });
+    assert.deepStrictEqual(app.state.progress['user-A|de'].days.today, { articles: 1, answers: 2, typed: 1, quizzes: 1, sentences: 1 });
+    assert.strictEqual(app.state.progress['user-A|en'], undefined);
+
+    const p = (await app.call('GET', '/progress', v2)).json;
+    assert.deepStrictEqual([p.streak.current, p.streak.active_today], [1, true]);
+    assert.deepStrictEqual(p.goals.map(g => [g.key, g.done]), [['articles', 1], ['typed', 1], ['sentences', 1]]);
+    assert.strictEqual(p.next_action.kind, 'quiz');                                                // read, quiz not taken
+    // app 1.5 (own screens) records too, and has no progress screen
+    await app.call('POST', '/vocabulary/' + (await app.call('GET', '/vocabulary', { lang: 'de' })).json.vocabulary[0].id + '/test', { lang: 'de', body: { correct: true } });
+    assert.strictEqual(app.state.progress['user-A|de'].days.today.typed, 2);
+    assert.strictEqual((await app.call('GET', '/progress', { lang: 'de' })).status, 501);
+    assert.strictEqual((await app.call('GET', '/progress', {})).json.japanese, true);
+  } finally { app.close(); }
 });

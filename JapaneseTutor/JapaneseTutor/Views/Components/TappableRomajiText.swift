@@ -73,6 +73,8 @@ private func extractFurigana(_ text: String) -> String? {
 }
 
 private func isCommonWord(_ word: String, writingSystem: String) -> Bool {
+    // the lists below are Japanese particles; "to", "no", "so" are ordinary German / English words
+    guard LearningLanguage.current.isJapanese else { return false }
     if writingSystem == "kana" || writingSystem == "kanji" {
         let stripped = stripFurigana(word)
         return commonKanaWords.contains(stripped)
@@ -102,13 +104,18 @@ private func findVocabMatch(_ word: String, in lookup: [String: VocabularyWord],
         // Prefix match for conjugated forms. Short words (particles like
         // "ga", "no", "ni") only match exactly — otherwise "ga" linked to
         // "gamen" and every particle in the article was underlined.
-        guard noMacron.count >= 3 else { return nil }
-        for (key, vocab) in lookup where stripMacrons(key).count >= 3 {
-            if lower.hasPrefix(key) && lower.count <= key.count + 4 { return vocab }
-            if key.hasPrefix(lower) && key.count <= lower.count + 4 { return vocab }
+        // German / English: endings are shorter ("rise" / "rises", "Regierung" / "Regierungen"),
+        // and short words are everywhere ("ran" must not link to "range")
+        let japanese = LearningLanguage.current.isJapanese
+        let minLength = japanese ? 3 : 4
+        let slack = japanese ? 4 : 3
+        guard noMacron.count >= minLength else { return nil }
+        for (key, vocab) in lookup where stripMacrons(key).count >= minLength {
+            if lower.hasPrefix(key) && lower.count <= key.count + slack { return vocab }
+            if key.hasPrefix(lower) && key.count <= lower.count + slack { return vocab }
             let keyNoMacron = stripMacrons(key)
-            if noMacron.hasPrefix(keyNoMacron) && noMacron.count <= keyNoMacron.count + 4 { return vocab }
-            if keyNoMacron.hasPrefix(noMacron) && keyNoMacron.count <= noMacron.count + 4 { return vocab }
+            if noMacron.hasPrefix(keyNoMacron) && noMacron.count <= keyNoMacron.count + slack { return vocab }
+            if keyNoMacron.hasPrefix(noMacron) && keyNoMacron.count <= noMacron.count + slack { return vocab }
         }
     }
 
@@ -316,9 +323,15 @@ struct TappableRomajiText: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 // Names and particles aren't vocabulary to learn
+                // German / English: the example sentence that comes with the lookup
+                if let example = r.example, !example.isEmpty {
+                    Text(example)
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if !["name", "particle"].contains(r.partOfSpeech ?? "") {
                     if r.vocabularyId != nil || state.added {
-                        Label(state.added ? "Added to your words" : "Already in your words", systemImage: "checkmark.circle.fill")
+                        Label(state.added ? L("Added to your words", "単語帳に追加しました") : L("Already in your words", "単語帳に入っています"), systemImage: "checkmark.circle.fill")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.green)
                     } else {
@@ -327,7 +340,7 @@ struct TappableRomajiText: View {
                         } label: {
                             HStack(spacing: 4) {
                                 if state.adding { ProgressView().controlSize(.small) }
-                                Label("Add to my words", systemImage: "plus.circle.fill")
+                                Label(L("Add to my words", "単語帳に追加"), systemImage: "plus.circle.fill")
                             }
                             .font(.caption.weight(.semibold))
                         }
@@ -335,13 +348,13 @@ struct TappableRomajiText: View {
                     }
                 }
             } else if state.failed {
-                Text("Couldn't look up \"\(state.tapped)\". Tap it again to retry.")
+                Text(L("Couldn't look up \"\(state.tapped)\". Tap it again to retry.", "「\(state.tapped)」を調べられませんでした。もう一度タップしてください。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Looking up \(state.tapped)…")
+                    Text(L("Looking up \(state.tapped)…", "「\(state.tapped)」を調べています…"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -381,8 +394,8 @@ struct TappableRomajiText: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if let pos = word.partOfSpeech {
-                Text(pos)
+            if let pos = word.partOfSpeech, !pos.isEmpty {
+                Text(Labels.partOfSpeech(pos))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -500,6 +513,14 @@ private struct SelectableTextView: UIViewRepresentable {
         // Build vocabulary lookup with keys for all writing systems
         var vocabLookup: [String: VocabularyWord] = [:]
         for word in vocabulary {
+            if !LearningLanguage.current.isJapanese {
+                // German / English: the word as written in the text and its headword.
+                // Not the dictionary form — "das Ei" would make every "das" a link.
+                vocabLookup[word.wordRomaji.lowercased()] = word
+                let head = WordAnswer.parts(word.wordRomajiMacron).headword.lowercased()
+                if vocabLookup[head] == nil { vocabLookup[head] = word }
+                continue
+            }
             // Romaji keys
             vocabLookup[word.wordRomajiMacron.lowercased()] = word
             vocabLookup[word.wordRomaji.lowercased()] = word

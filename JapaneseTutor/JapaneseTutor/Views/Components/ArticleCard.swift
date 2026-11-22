@@ -26,15 +26,19 @@ struct ArticleCard: View {
                 }
 
                 if let topic = article.topic {
-                    Text(shortLabel(topic))
+                    Text(LearningLanguage.current.isJapanese ? shortLabel(topic) : Labels.topic(topic))
+                        .lineLimit(1)
                         .font(.caption)
                         .foregroundStyle(Color.accentColor)
                 }
 
                 if let created = article.createdAt {
-                    Text("·")
-                        .font(.caption)
-                        .foregroundStyle(.quaternary)
+                    // the dot separates the date from what stands before it
+                    if article.region != nil || article.topic != nil {
+                        Text("·")
+                            .font(.caption)
+                            .foregroundStyle(.quaternary)
+                    }
                     Text(formatDate(created))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
@@ -49,7 +53,7 @@ struct ArticleCard: View {
                     HStack(spacing: 3) {
                         Image(systemName: "character.book.closed")
                             .font(.system(size: 10))
-                        Text("\(count) new words")
+                        Text(L("\(count) new words", "新出\(count)語"))
                             .font(.caption)
                     }
                     .foregroundStyle(.orange)
@@ -59,7 +63,7 @@ struct ArticleCard: View {
                     HStack(spacing: 3) {
                         Image(systemName: "arrow.trianglehead.2.counterclockwise")
                             .font(.system(size: 10))
-                        Text("\(reviewCount) review")
+                        Text(L("\(reviewCount) review", "復習\(reviewCount)語"))
                             .font(.caption)
                     }
                     .foregroundStyle(.blue)
@@ -97,9 +101,11 @@ struct ArticleCard: View {
     private func regionFlag(_ region: String) -> String {
         switch region.lowercased() {
         case "germany": return "🇩🇪"
+        case "austria": return "🇦🇹"
+        case "switzerland": return "🇨🇭"
         case "japan": return "🇯🇵"
-        case "us", "usa": return "🇺🇸"
-        case "uk": return "🇬🇧"
+        case "us", "usa", "united states": return "🇺🇸"
+        case "uk", "united kingdom": return "🇬🇧"
         case "france": return "🇫🇷"
         case "china": return "🇨🇳"
         case "korea", "south korea": return "🇰🇷"
@@ -126,6 +132,6 @@ struct ArticleCard: View {
         let months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         guard month >= 1, month <= 12 else { return String(datePart) }
-        return "\(months[month]) \(day)"
+        return L("\(months[month]) \(day)", "\(month)月\(day)日")
     }
 }

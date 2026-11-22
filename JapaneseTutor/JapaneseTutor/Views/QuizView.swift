@@ -13,6 +13,8 @@ class QuizViewModel {
     var quizResult: QuizSubmitResponse?
     var errorMessage: String?
     var articleTitle: String = ""
+    /// Question ID → its answer options in the order shown
+    var options: [Int: [String]] = [:]
 
     var currentQuestion: QuizQuestion? {
         guard currentIndex < questions.count else { return nil }
@@ -33,6 +35,9 @@ class QuizViewModel {
         do {
             let response = try await APIClient.shared.fetchQuiz(articleId: articleId)
             questions = response.questions
+            // Shuffle once. `allOptions` shuffles on every call, so the answers
+            // used to jump to new places the moment one was tapped.
+            for q in response.questions { options[q.id] = q.allOptions }
             articleTitle = response.articleTitle
         } catch {
             errorMessage = error.localizedDescription
@@ -74,20 +79,20 @@ struct QuizView: View {
     var body: some View {
         VStack {
             if viewModel.isLoading {
-                ProgressView("Loading quiz...")
+                ProgressView(L("Loading quiz...", "クイズを読み込んでいます…"))
             } else if viewModel.isFinished {
                 quizResultView
             } else if let question = viewModel.currentQuestion {
                 questionView(question)
             } else if viewModel.questions.isEmpty {
                 ContentUnavailableView(
-                    "No Quiz Available",
+                    L("No Quiz Available", "クイズがありません"),
                     systemImage: "questionmark.circle",
-                    description: Text("This article doesn't have a quiz yet.")
+                    description: Text(L("This article doesn't have a quiz yet.", "この記事にはまだクイズがありません。"))
                 )
             }
         }
-        .navigationTitle("Quiz")
+        .navigationTitle(L("Quiz", "クイズ"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.loadQuiz(articleId: articleId)
@@ -106,12 +111,12 @@ struct QuizView: View {
                         .tint(.accentColor)
                         .padding(.horizontal)
 
-                    Text("Question \(viewModel.currentIndex + 1) of \(viewModel.questions.count)")
+                    Text(L("Question \(viewModel.currentIndex + 1) of \(viewModel.questions.count)", "\(viewModel.questions.count)問中 \(viewModel.currentIndex + 1)問目"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     // Question type badge
-                    Text(question.type.capitalized)
+                    Text(Labels.quizType(question.type))
                         .font(.caption2)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -159,7 +164,7 @@ struct QuizView: View {
                         }
                     }
                 } label: {
-                    Text(viewModel.currentIndex + 1 >= viewModel.questions.count ? "See Results" : "Next Question")
+                    Text(viewModel.currentIndex + 1 >= viewModel.questions.count ? L("See Results", "結果を見る") : L("Next Question", "次の問題"))
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -176,7 +181,7 @@ struct QuizView: View {
     @ViewBuilder
     private func multipleChoiceOptions(_ question: QuizQuestion) -> some View {
         VStack(spacing: 10) {
-            ForEach(question.allOptions, id: \.self) { option in
+            ForEach(viewModel.options[question.id] ?? question.allOptions, id: \.self) { option in
                 Button {
                     viewModel.selectAnswer(option)
                 } label: {
@@ -225,7 +230,7 @@ struct QuizView: View {
     @ViewBuilder
     private func freeFormAnswer(_ question: QuizQuestion) -> some View {
         VStack(spacing: 12) {
-            Text("Correct answer:")
+            Text(L("Correct answer:", "正しい答え:"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -242,7 +247,7 @@ struct QuizView: View {
                     Button {
                         viewModel.selectAnswer("incorrect")
                     } label: {
-                        Label("I got it wrong", systemImage: "xmark")
+                        Label(L("I got it wrong", "間違えた"), systemImage: "xmark")
                             .padding()
                             .background(Color.red.opacity(0.1))
                             .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -251,7 +256,7 @@ struct QuizView: View {
                     Button {
                         viewModel.selectAnswer(question.correctAnswer)
                     } label: {
-                        Label("I got it right", systemImage: "checkmark")
+                        Label(L("I got it right", "正解した"), systemImage: "checkmark")
                             .padding()
                             .background(Color.green.opacity(0.1))
                             .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -267,13 +272,16 @@ struct QuizView: View {
             HStack {
                 Image(systemName: viewModel.isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill")
                     .foregroundStyle(viewModel.isCorrect ? .green : .red)
-                Text(viewModel.isCorrect ? "Correct!" : "Incorrect")
+                Text(viewModel.isCorrect ? L("Correct!", "正解です") : L("Incorrect", "不正解です"))
                     .font(.headline)
                     .foregroundStyle(viewModel.isCorrect ? .green : .red)
             }
 
-            if !viewModel.isCorrect, let hint = question.hint {
-                Text("Hint: \(hint)")
+            // German / English: the hint is the explanation of the answer — worth reading after a right answer too
+            if !viewModel.isCorrect || !LearningLanguage.current.isJapanese, let hint = question.hint {
+                Text(L("Hint: \(hint)", hint))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -289,16 +297,16 @@ struct QuizView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     if viewModel.isSubmitting {
-                        ProgressView("Submitting results...")
+                        ProgressView(L("Submitting results...", "結果を保存しています…"))
                     } else if let result = viewModel.quizResult {
                         Image(systemName: result.score.percentage >= 70 ? "star.fill" : "arrow.counterclockwise")
                             .font(.system(size: 60))
                             .foregroundStyle(result.score.percentage >= 70 ? .yellow : .orange)
 
-                        Text("Quiz Complete!")
+                        Text(L("Quiz Complete!", "クイズ完了！"))
                             .font(.title.weight(.bold))
 
-                        Text("\(result.score.correct) / \(result.score.total) correct")
+                        Text(L("\(result.score.correct) / \(result.score.total) correct", "\(result.score.total)問中 \(result.score.correct)問正解"))
                             .font(.title2)
 
                         Text("\(result.score.percentage)%")
@@ -309,17 +317,17 @@ struct QuizView: View {
                         let incorrectResults = result.results.filter { $0.correct == false }
                         if !incorrectResults.isEmpty {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Review these:")
+                                Text(L("Review these:", "復習しましょう:"))
                                     .font(.headline)
                                 ForEach(Array(incorrectResults.enumerated()), id: \.offset) { _, r in
                                     HStack {
                                         Image(systemName: "xmark.circle")
                                             .foregroundStyle(.red)
                                         VStack(alignment: .leading) {
-                                            Text("Your answer: \(r.yourAnswer ?? "")")
+                                            Text(L("Your answer: \(r.yourAnswer ?? "")", "あなたの答え: \(r.yourAnswer ?? "")"))
                                                 .font(.caption)
                                                 .foregroundStyle(.secondary)
-                                            Text("Correct: \(r.correctAnswer ?? "")")
+                                            Text(L("Correct: \(r.correctAnswer ?? "")", "正解: \(r.correctAnswer ?? "")"))
                                                 .font(.caption.weight(.medium))
                                         }
                                     }
@@ -338,7 +346,7 @@ struct QuizView: View {
 
             // Done button — pinned to bottom, outside scroll
             if viewModel.quizResult != nil {
-                Button("Done") {
+                Button(L("Done", "完了")) {
                     dismiss()
                 }
                 .font(.headline)

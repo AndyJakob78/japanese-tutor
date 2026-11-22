@@ -3,12 +3,16 @@ import SwiftUI
 struct OnboardingLevelView: View {
     @Bindable var vm: OnboardingViewModel
 
-    private let levels: [(id: String, label: String, subtitle: String)] = [
+    private let levels: [(id: String, label: String, subtitle: String)] = LearningLanguage.current.isJapanese ? [
         ("N5", "N5 — Beginner",           "First steps in Japanese — hiragana, basic vocabulary, simple sentences."),
         ("N4", "N4 — Elementary",          "Everyday conversations, ~300 kanji, simple grammar patterns."),
         ("N3", "N3 — Intermediate",        "News headlines, natural spoken Japanese, mixed kanji text."),
         ("N2", "N2 — Upper Intermediate",  "Newspapers, business Japanese, complex sentence structures."),
         ("N1", "N1 — Advanced",            "Native-level texts, nuanced expression, specialized vocabulary."),
+    ] : [
+        ("A1-A2", "A1–A2 — 入門",   "短い文と基本の単語。はじめての方、学び直したい方に。"),
+        ("B1",    "B1 — 中級",      "日常の話題なら読める方に。少し長い文と、ニュースらしい表現。"),
+        ("B2",    "B2 — 中上級",    "ニュースをほぼそのまま読みたい方に。自然な文体と幅広い単語。"),
     ]
 
     var body: some View {
@@ -18,10 +22,10 @@ struct OnboardingLevelView: View {
                     .padding(.top, 40)
 
                 VStack(spacing: 8) {
-                    Text("What is your JLPT level?")
+                    Text(L("What is your JLPT level?", "\(LearningLanguage.current.targetName)のレベルを選んでください"))
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
-                    Text("Articles and vocabulary will be tuned to your level.")
+                    Text(L("Articles and vocabulary will be tuned to your level.", "記事と単語をあなたのレベルに合わせます。"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -63,8 +67,9 @@ private struct LevelCard: View {
         Button(action: onTap) {
             HStack(alignment: .top, spacing: 12) {
                 // Badge
-                Text(levelId)
-                    .font(.headline.weight(.bold))
+                Text(levelId == "A1-A2" ? "A1\nA2" : levelId)   // two lines fit the square badge
+                    .font(levelId == "A1-A2" ? .caption.weight(.bold) : .headline.weight(.bold))
+                    .multilineTextAlignment(.center)
                     .foregroundStyle(isSelected ? .white : .primary)
                     .frame(width: 42, height: 42)
                     .background(isSelected ? Color.accentColor : Color(.systemGray5))

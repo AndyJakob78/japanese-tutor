@@ -9,6 +9,7 @@
 const express = require('express');
 const router = express.Router();
 const { collections } = require('../services/firestore');
+const { bump } = require('../services/progress-store');
 const { runPipeline, getArticleWithDetails } = require('../../agent/pipeline');
 const { checkTrialStatus, incrementGenerationCount, FREE_TRIAL_LIMIT } = require('../services/deviceService');
 const { spellOutNumbers, spellOutArticle } = require('../../agent/middleware/spell-numbers');
@@ -207,7 +208,9 @@ router.patch('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Article not found' });
     }
 
+    const firstRead = updates.read_at !== undefined && !snapshot.docs[0].data().read_at;
     await snapshot.docs[0].ref.update(updates);
+    if (firstRead) await bump(req, 'ja', { articles: 1 }); // the progress screen's daily record
 
     res.json({ updated: true });
   } catch (err) {

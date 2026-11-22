@@ -70,6 +70,7 @@ app.use('/api/vocabulary', require('./routes/vocabulary'));
 app.use('/api/articles', require('./routes/quiz')); // quiz routes are under /api/articles/:id/quiz
 app.use('/api/config', require('./routes/config'));
 app.use('/api/stats', require('./routes/stats'));
+app.use('/api/progress', require('./routes/progress')); // progress screen: level, next step, streak, goals
 app.use('/api/device', require('./routes/devices')); // trial status + Pro upgrade
 app.use('/api/practice', require('./routes/practice')); // sentence building
 

@@ -115,7 +115,7 @@ struct VocabularyListView: View {
                             viewModel.selectedStatus = status == "All" ? nil : status
                             Task { await viewModel.loadVocabulary() }
                         } label: {
-                            Text(status.capitalized)
+                            Text(Labels.status(status))
                                 .font(.caption)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
@@ -150,11 +150,11 @@ struct VocabularyListView: View {
                             .font(.title2)
                             .foregroundStyle(lastTypedReviewDate == TypedReviewView.today ? .green : .accentColor)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Daily Review")
+                            Text(L("Daily Review", "毎日の復習"))
                                 .font(.headline)
                             Text(lastTypedReviewDate == TypedReviewView.today
-                                 ? "Done today — you can go again"
-                                 : "Type 10 words from memory · 3 min")
+                                 ? L("Done today — you can go again", "今日は完了 — もう一度できます")
+                                 : L("Type 10 words from memory · 3 min", "10語を思い出して入力 · 3分"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -176,9 +176,9 @@ struct VocabularyListView: View {
                             .font(.title2)
                             .foregroundStyle(.orange)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("My Mistakes")
+                            Text(L("My Mistakes", "間違いノート"))
                                 .font(.headline)
-                            Text("Your weak spots from Build Sentences")
+                            Text(L("Your weak spots from Build Sentences", "「文を作る」でわかった苦手なところ"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -232,13 +232,13 @@ struct VocabularyListView: View {
                     .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) {
                         if word.status != "known" {
-                            Button("Known") {
+                            Button(L("Known", "覚えた")) {
                                 Task { await viewModel.updateStatus(wordId: word.id, newStatus: "known") }
                             }
                             .tint(.blue)
                         }
                         if word.status != "learning" {
-                            Button("Review") {
+                            Button(L("Review", "復習する")) {
                                 Task { await viewModel.updateStatus(wordId: word.id, newStatus: "learning") }
                             }
                             .tint(.orange)
@@ -263,12 +263,12 @@ struct VocabularyListView: View {
             }
             .listStyle(.plain)
         }
-        .searchable(text: $viewModel.searchText, prompt: "Search words")
+        .searchable(text: $viewModel.searchText, prompt: L("Search words", "単語を検索"))
         .onSubmit(of: .search) {
             Task { await viewModel.loadVocabulary() }
         }
         // Show the server-side total so the number is correct even before all pages load
-        .navigationTitle("Vocabulary (\(viewModel.totalCount > 0 ? viewModel.totalCount : viewModel.words.count))")
+        .navigationTitle(L("Vocabulary", "単語") + " (\(viewModel.totalCount > 0 ? viewModel.totalCount : viewModel.words.count))")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -276,7 +276,7 @@ struct VocabularyListView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "brain.head.profile")
-                        Text("Quiz")
+                        Text(L("Quiz", "クイズ"))
                             .fontWeight(.semibold)
                     }
                     .font(.subheadline)
@@ -437,8 +437,8 @@ class VocabQuizViewModel {
 
     /// "habit, custom" → "habit"; "to look for; to search" → "to look for"
     static func firstSense(_ meaning: String) -> String {
-        let first = meaning.split(whereSeparator: { $0 == "," || $0 == ";" || $0 == "/" }).first.map(String.init) ?? meaning
-        let trimmed = first.replacingOccurrences(of: #"\s*\([^)]*\)"#, with: "", options: .regularExpression)
+        let first = meaning.split(whereSeparator: { $0 == "," || $0 == ";" || $0 == "/" || $0 == "、" || $0 == "；" }).first.map(String.init) ?? meaning
+        let trimmed = first.replacingOccurrences(of: #"\s*[（(][^)）]*[)）]"#, with: "", options: .regularExpression)
             .trimmingCharacters(in: .whitespaces)
         return trimmed.isEmpty ? meaning : trimmed
     }
@@ -459,6 +459,8 @@ class VocabQuizViewModel {
 
     /// One word, no digits, no capitalised name
     static func isPlainWord(_ w: VocabularyWord) -> Bool {
+        // German / English: every dictionary form has spaces and every German noun a capital
+        guard LearningLanguage.current.isJapanese else { return !(w.partOfSpeech ?? "").lowercased().contains("name") }
         let ja = w.wordRomajiMacron
         let sense = firstSense(w.meaningEn)
         return !ja.contains(" ") && ja.rangeOfCharacter(from: .decimalDigits) == nil
@@ -473,6 +475,8 @@ class VocabQuizViewModel {
         if pos.contains("adj") { return .adjective }
         if pos == "verb" || (pos.contains("verb") && !pos.contains("adverb") && w.meaningEn.lowercased().hasPrefix("to ")) { return .verb }
         if w.meaningEn.lowercased().hasPrefix("to ") { return .verb }
+        // German / English: the meaning is Japanese; a word list entry "to rise" is a verb
+        if !LearningLanguage.current.isJapanese, w.wordRomajiMacron.lowercased().hasPrefix("to ") { return .verb }
         return .other
     }
 
@@ -511,14 +515,14 @@ struct VocabularyQuizView: View {
             } else if let question = viewModel.currentQuestion {
                 questionView(question)
             } else {
-                ProgressView("Preparing quiz...")
+                ProgressView(L("Preparing quiz...", "クイズを準備しています…"))
             }
         }
-        .navigationTitle("Vocabulary Quiz")
+        .navigationTitle(L("Vocabulary Quiz", "単語クイズ"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Close") { dismiss() }
+                Button(L("Close", "閉じる")) { dismiss() }
             }
         }
         .task {
@@ -533,7 +537,7 @@ struct VocabularyQuizView: View {
                 .tint(.accentColor)
                 .padding(.horizontal)
 
-            Text("Question \(viewModel.currentIndex + 1) of \(viewModel.questions.count)")
+            Text(L("Question \(viewModel.currentIndex + 1) of \(viewModel.questions.count)", "\(viewModel.questions.count)問中 \(viewModel.currentIndex + 1)問目"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -546,7 +550,7 @@ struct VocabularyQuizView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
-                Text("Which Japanese word means this?")
+                Text(L("Which Japanese word means this?", "この意味の\(LearningLanguage.current.targetName)の単語はどれですか？"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
@@ -564,7 +568,7 @@ struct VocabularyQuizView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text("What does this word mean?")
+                Text(L("What does this word mean?", "この単語の意味は何ですか？"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -606,7 +610,7 @@ struct VocabularyQuizView: View {
                 HStack {
                     Image(systemName: viewModel.isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .foregroundStyle(viewModel.isCorrect ? .green : .red)
-                    Text(viewModel.isCorrect ? "Correct!" : "Incorrect")
+                    Text(viewModel.isCorrect ? L("Correct!", "正解です") : L("Incorrect", "不正解です"))
                         .font(.headline)
                         .foregroundStyle(viewModel.isCorrect ? .green : .red)
                 }
@@ -617,7 +621,7 @@ struct VocabularyQuizView: View {
                         Task { await viewModel.recordResults() }
                     }
                 } label: {
-                    Text(viewModel.currentIndex + 1 >= viewModel.questions.count ? "See Results" : "Next")
+                    Text(viewModel.currentIndex + 1 >= viewModel.questions.count ? L("See Results", "結果を見る") : L("Next", "次へ"))
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -664,10 +668,10 @@ struct VocabularyQuizView: View {
                 .font(.system(size: 60))
                 .foregroundStyle(percentage >= 70 ? .yellow : .orange)
 
-            Text("Quiz Complete!")
+            Text(L("Quiz Complete!", "クイズ完了！"))
                 .font(.title.weight(.bold))
 
-            Text("\(viewModel.correctCount) / \(viewModel.questions.count) correct")
+            Text(L("\(viewModel.correctCount) / \(viewModel.questions.count) correct", "\(viewModel.questions.count)問中 \(viewModel.correctCount)問正解"))
                 .font(.title2)
 
             Text("\(percentage)%")
@@ -678,7 +682,7 @@ struct VocabularyQuizView: View {
             let incorrectResults = viewModel.results.filter { !$0.correct }
             if !incorrectResults.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Review these:")
+                    Text(L("Review these:", "復習しましょう:"))
                         .font(.headline)
                     ForEach(Array(incorrectResults.enumerated()), id: \.offset) { _, r in
                         HStack {
@@ -705,7 +709,7 @@ struct VocabularyQuizView: View {
                 .padding(.horizontal)
             }
 
-            Button("Done") { dismiss() }
+            Button(L("Done", "完了")) { dismiss() }
                 .font(.headline)
                 .padding()
                 .frame(maxWidth: .infinity)
@@ -722,7 +726,7 @@ struct StatusBadge: View {
     let status: String
 
     var body: some View {
-        Text(status.capitalized)
+        Text(Labels.status(status))
             .font(.caption2)
             .padding(.horizontal, 8)
             .padding(.vertical, 2)

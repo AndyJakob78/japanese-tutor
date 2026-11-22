@@ -9,6 +9,7 @@
 const express = require('express');
 const router = express.Router();
 const { collections, getNextId } = require('../services/firestore');
+const { bump } = require('../services/progress-store');
 
 // GET /api/vocabulary — list all words (filterable by status, level, category)
 router.get('/', async (req, res, next) => {
@@ -279,12 +280,19 @@ router.post('/:id/test', async (req, res, next) => {
     // The schedule lives in server/services/word-schedule.js: only recall
     // (typed answer, own sentence) can make a word "known".
     const { applyTestResult } = require('../services/word-schedule');
-    const change = applyTestResult(word, correct, String(req.body.mode || 'choice'));
+    const mode = String(req.body.mode || 'choice');
+    const change = applyTestResult(word, correct, mode);
     const newStatus = change.status;
+    // the day a word became "known" — the progress screen's pace is counted from it
+    const becameKnown = newStatus === 'known' && word.status === 'learning';
+    if (becameKnown) change.known_at = new Date().toISOString();
     await docRef.update(change);
+    // the daily record of the progress screen (own sentences are counted by the sentence check)
+    await bump(req, 'ja', { answers: mode === 'typed' ? 1 : 0, typed: mode === 'typed' && correct ? 1 : 0, quizzes: mode === 'choice' ? 1 : 0, known: becameKnown ? 1 : 0 });
 
     const updatedDoc = await docRef.get();
-    res.json(updatedDoc.data());
+    // { word, statusChanged } is what the app has always read; this route answered with the bare word before
+    res.json({ word: updatedDoc.data(), statusChanged: newStatus !== word.status });
   } catch (err) {
     next(err);
   }

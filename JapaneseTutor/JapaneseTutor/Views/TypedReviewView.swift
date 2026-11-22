@@ -8,7 +8,8 @@ import SwiftUI
 
 @Observable
 class TypedReviewViewModel {
-    enum Feedback: Equatable { case correct, typo, synonym(String), wrong }
+    /// noArticle: German noun typed without der / die / das — right, with a reminder
+    enum Feedback: Equatable { case correct, typo, synonym(String), noArticle(String), wrong }
 
     var queue: [VocabularyWord] = []
     /// Word ID → other words of the learner's with the same meaning
@@ -36,7 +37,7 @@ class TypedReviewViewModel {
                 if let id = Int(id) { alsoAccept[id] = words }
             }
         } catch {
-            errorMessage = "Couldn't load your review words."
+            errorMessage = L("Couldn't load your review words.", "復習の単語を読み込めませんでした。")
         }
         isLoading = false
     }
@@ -68,7 +69,8 @@ class TypedReviewViewModel {
 
     /// "kyōiku" — show "ky…" (first two letters, then dots per remaining letter)
     func hint(for word: VocabularyWord) -> String {
-        let w = word.wordRomajiMacron
+        // German / English: the word itself, without article and plural ("die Regierung, -en" → "Regierung")
+        let w = LearningLanguage.current.isJapanese ? word.wordRomajiMacron : WordAnswer.parts(word.wordRomajiMacron).headword
         let shown = w.prefix(2)
         return shown + String(repeating: " ·", count: max(0, w.count - shown.count))
     }
@@ -76,6 +78,7 @@ class TypedReviewViewModel {
     // MARK: Grading
 
     static func grade(_ typed: String, word: VocabularyWord, alsoAccept: [String] = []) -> Feedback {
+        if !LearningLanguage.current.isJapanese { return gradeLatin(typed, word: word, alsoAccept: alsoAccept) }
         let given = normalize(typed)
         guard !given.isEmpty else { return .wrong }
         var targets = [word.wordRomajiMacron, word.wordRomaji].map(normalize)
@@ -86,6 +89,31 @@ class TypedReviewViewModel {
         if let main = targets.first, main.count >= 6, editDistance(given, main) == 1 { return .typo }
         // Another word with the same meaning ("plan": yotei for keikaku) is right too
         if let other = alsoAccept.first(where: { normalize($0) == given }) { return .synonym(other) }
+        return .wrong
+    }
+
+    /// German / English. A German noun is asked with its article: "die Regierung".
+    /// Without the article it counts, with a reminder; a wrong article is wrong.
+    static func gradeLatin(_ typed: String, word: VocabularyWord, alsoAccept: [String] = []) -> Feedback {
+        let given = WordAnswer.normalize(typed)
+        guard !given.isEmpty else { return .wrong }
+        let (article, headword) = WordAnswer.parts(word.wordRomajiMacron)
+        let head = WordAnswer.normalize(headword)
+        if let article {
+            if given == "\(article) \(head)" { return .correct }
+            if given == head { return .noArticle(article) }
+            // another article in front of the right noun is a gender mistake, not a typo
+            if ["der ", "die ", "das "].contains(where: { given.hasPrefix($0) }) {
+                let noun = String(given.dropFirst(4))
+                if given.hasPrefix(article + " "), head.count >= 6, editDistance(noun, head) == 1 { return .typo }
+                if let other = alsoAccept.first(where: { WordAnswer.normalize(WordAnswer.parts($0).headword) == noun && given.hasPrefix((WordAnswer.parts($0).article ?? "") + " ") }) { return .synonym(other) }
+                return .wrong
+            }
+        } else if given == head || given == "to \(head)" {
+            return .correct
+        }
+        if head.count >= 6, editDistance(given, head) == 1 { return .typo }
+        if let other = alsoAccept.first(where: { WordAnswer.normalize(WordAnswer.parts($0).headword) == given }) { return .synonym(other) }
         return .wrong
     }
 
@@ -135,14 +163,14 @@ struct TypedReviewView: View {
     var body: some View {
         VStack(spacing: 20) {
             if viewModel.isLoading {
-                ProgressView("Picking your words…")
+                ProgressView(L("Picking your words…", "単語を選んでいます…"))
             } else if let error = viewModel.errorMessage {
                 Text(error).foregroundStyle(.red)
             } else if viewModel.total == 0 {
                 ContentUnavailableView(
-                    "Nothing to review",
+                    L("Nothing to review", "復習する単語はありません"),
                     systemImage: "checkmark.seal",
-                    description: Text("You've reviewed all your words recently. Come back tomorrow.")
+                    description: Text(L("You've reviewed all your words recently. Come back tomorrow.", "最近すべての単語を復習しました。また明日どうぞ。"))
                 )
             } else if viewModel.isFinished {
                 summary
@@ -151,11 +179,11 @@ struct TypedReviewView: View {
             }
         }
         .padding()
-        .navigationTitle("Daily Review")
+        .navigationTitle(L("Daily Review", "毎日の復習"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Close") { dismiss() }
+                Button(L("Close", "閉じる")) { dismiss() }
             }
         }
         .task { await viewModel.load() }
@@ -178,9 +206,10 @@ struct TypedReviewView: View {
             .font(.title.weight(.bold))
             .multilineTextAlignment(.center)
 
-        Text("Type the Japanese word")
+        Text(typePrompt(word))
             .font(.subheadline)
             .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
 
         if viewModel.usedHint {
             Text(viewModel.hint(for: word))
@@ -188,7 +217,7 @@ struct TypedReviewView: View {
                 .foregroundStyle(.orange)
         }
 
-        TextField("romaji", text: $viewModel.answer)
+        TextField(L("romaji", WordAnswer.parts(word.wordRomajiMacron).article == nil ? "単語" : "der / die / das …"), text: $viewModel.answer)
             .font(.title2)
             .multilineTextAlignment(.center)
             .textInputAutocapitalization(.never)
@@ -206,20 +235,26 @@ struct TypedReviewView: View {
             feedbackView(feedback, word: word)
         } else {
             HStack(spacing: 12) {
-                Button("Hint") { viewModel.usedHint = true }
+                Button(L("Hint", "ヒント")) { viewModel.usedHint = true }
                     .disabled(viewModel.usedHint)
                     .buttonStyle(.bordered)
                 Button {
                     Task { await viewModel.submit() }
                 } label: {
-                    Text("Check").frame(maxWidth: .infinity)
+                    Text(L("Check", "答える")).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(viewModel.answer.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            Text("No macrons needed — kyouiku and kyōiku both count.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if LearningLanguage.current.isJapanese {
+                Text("No macrons needed — kyouiku and kyōiku both count.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if LearningLanguage.current == .german {
+                Text("ä ö ü ß は ae / oe / ue / ss でも正解です。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
 
         Spacer()
@@ -230,19 +265,25 @@ struct TypedReviewView: View {
         VStack(spacing: 8) {
             switch feedback {
             case .correct:
-                Label(viewModel.usedHint ? "Right — with a hint" : "Correct!", systemImage: "checkmark.circle.fill")
+                Label(viewModel.usedHint ? L("Right — with a hint", "正解 (ヒントあり)") : L("Correct!", "正解です"), systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
             case .typo:
-                Label("Correct — small typo", systemImage: "checkmark.circle.fill")
+                Label(L("Correct — small typo", "正解 (小さな打ち間違い)"), systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
             case .synonym(let other):
-                Label("\(other) is right too!", systemImage: "checkmark.circle.fill")
+                Label(L("\(other) is right too!", "\(other) も正解です"), systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-                Text("This time we were looking for:")
+                Text(L("This time we were looking for:", "今回の答えは:"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            case .noArticle(let article):
+                Label(viewModel.usedHint ? "正解 (ヒントあり)" : "正解です", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("冠詞も覚えましょう: \(article)")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             case .wrong:
-                Label("Not quite", systemImage: "xmark.circle.fill")
+                Label(L("Not quite", "不正解です"), systemImage: "xmark.circle.fill")
                     .foregroundStyle(.red)
             }
             HStack(spacing: 8) {
@@ -252,7 +293,7 @@ struct TypedReviewView: View {
                 }
             }
             if feedback == .wrong {
-                Text("It will come back once more at the end.")
+                Text(L("It will come back once more at the end.", "最後にもう一度出ます。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -262,7 +303,7 @@ struct TypedReviewView: View {
         Button {
             viewModel.next()
         } label: {
-            Text(viewModel.queue.count <= 1 && feedback != .wrong ? "See results" : "Next")
+            Text(viewModel.queue.count <= 1 && feedback != .wrong ? L("See results", "結果を見る") : L("Next", "次へ"))
                 .font(.headline)
                 .frame(maxWidth: .infinity)
         }
@@ -276,11 +317,11 @@ struct TypedReviewView: View {
             Image(systemName: viewModel.missed.isEmpty ? "star.fill" : "checkmark.seal.fill")
                 .font(.system(size: 56))
                 .foregroundStyle(viewModel.missed.isEmpty ? .yellow : .accentColor)
-            Text("\(viewModel.firstTryCorrect) / \(viewModel.total) on the first try")
+            Text(L("\(viewModel.firstTryCorrect) / \(viewModel.total) on the first try", "\(viewModel.total)語中 \(viewModel.firstTryCorrect)語が一回で正解"))
                 .font(.title2.weight(.bold))
             if !viewModel.missed.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Practise these again:")
+                    Text(L("Practise these again:", "もう一度練習しましょう:"))
                         .font(.headline)
                     ForEach(viewModel.missed) { w in
                         Text("\(w.wordRomajiMacron) — \(VocabQuizViewModel.firstSense(w.meaningEn))")
@@ -291,10 +332,19 @@ struct TypedReviewView: View {
                 .background(Color(.systemGray6))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
-            Button("Done") { dismiss() }
+            Button(L("Done", "完了")) { dismiss() }
                 .buttonStyle(.borderedProminent)
         }
         .onAppear { lastReviewDate = TypedReviewView.today }
+    }
+
+    private func typePrompt(_ word: VocabularyWord) -> String {
+        let language = LearningLanguage.current
+        if language.isJapanese { return "Type the Japanese word" }
+        if language == .german, WordAnswer.parts(word.wordRomajiMacron).article != nil {
+            return "ドイツ語の単語を、冠詞 (der / die / das) をつけて入力してください"
+        }
+        return "\(language.targetName)の単語を入力してください"
     }
 
     static var today: String {

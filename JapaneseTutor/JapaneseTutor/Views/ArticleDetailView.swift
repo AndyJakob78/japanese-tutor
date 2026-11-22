@@ -43,6 +43,11 @@ class ArticleDetailViewModel {
         }
         isLoading = false
     }
+
+    /// Fetch again without the loading screen (after a word was added).
+    func reloadQuietly(id: Int) async {
+        if let fresh = try? await APIClient.shared.fetchArticle(id: id) { article = fresh }
+    }
 }
 
 struct ArticleDetailView: View {
@@ -54,7 +59,7 @@ struct ArticleDetailView: View {
     var body: some View {
         ScrollView {
             if viewModel.isLoading {
-                ProgressView("Loading article...")
+                ProgressView(L("Loading article...", "記事を読み込んでいます…"))
                     .padding(.top, 100)
             } else if let article = viewModel.article {
                 VStack(alignment: .leading, spacing: 20) {
@@ -72,9 +77,9 @@ struct ArticleDetailView: View {
                             Image(systemName: "brain.head.profile")
                                 .font(.title2)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Test Your Knowledge")
+                                Text(L("Test Your Knowledge", "クイズに挑戦"))
                                     .font(.headline)
-                                Text("Take the vocabulary quiz for this article")
+                                Text(L("Take the vocabulary quiz for this article", "この記事の内容と単語を確認しましょう"))
                                     .font(.caption)
                                     .opacity(0.85)
                             }
@@ -98,9 +103,9 @@ struct ArticleDetailView: View {
                                 Image(systemName: "pencil.and.list.clipboard")
                                     .font(.title2)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("Build Sentences")
+                                    Text(L("Build Sentences", "文を作る"))
                                         .font(.headline)
-                                    Text("Write your own sentences with these words")
+                                    Text(L("Write your own sentences with these words", "記事の単語を使って自分で文を書きましょう"))
                                         .font(.caption)
                                         .opacity(0.85)
                                 }
@@ -135,12 +140,12 @@ struct ArticleDetailView: View {
                 }
                 .padding()
             } else if let error = viewModel.errorMessage {
-                Text("Error: \(error)")
+                Text(L("Error: \(error)", "エラー: \(error)"))
                     .foregroundStyle(.red)
                     .padding()
             }
         }
-        .navigationTitle("Article")
+        .navigationTitle(L("Article", "記事"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -157,7 +162,7 @@ struct ArticleDetailView: View {
                     } label: {
                         Image(systemName: "speaker.wave.2")
                     }
-                    .accessibilityLabel("Listen")
+                    .accessibilityLabel(L("Listen", "読み上げ"))
 
                     // Quiz button — always accessible
                     NavigationLink(destination: QuizView(articleId: articleId)) {
@@ -174,13 +179,13 @@ struct ArticleDetailView: View {
                     // Text size menu
                     Menu {
                         Button { viewModel.fontSize = max(14, viewModel.fontSize - 2) } label: {
-                            Label("Smaller Text", systemImage: "textformat.size.smaller")
+                            Label(L("Smaller Text", "文字を小さく"), systemImage: "textformat.size.smaller")
                         }
                         Button { viewModel.fontSize = min(28, viewModel.fontSize + 2) } label: {
-                            Label("Larger Text", systemImage: "textformat.size.larger")
+                            Label(L("Larger Text", "文字を大きく"), systemImage: "textformat.size.larger")
                         }
                         Button { viewModel.fontSize = 17 } label: {
-                            Label("Default Size", systemImage: "arrow.counterclockwise")
+                            Label(L("Default Size", "標準の大きさ"), systemImage: "arrow.counterclockwise")
                         }
                     } label: {
                         Image(systemName: "textformat.size")
@@ -229,14 +234,14 @@ struct ArticleDetailView: View {
                         .font(.caption)
                 }
                 if let topic = article.topic {
-                    Text(topic.capitalized)
+                    Text(LearningLanguage.current.isJapanese ? topic.capitalized : Labels.topic(topic))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 Spacer()
                 if let count = article.newWordCount, count > 0 {
-                    Text("\(count) new words")
+                    Text(L("\(count) new words", "新出\(count)語"))
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
@@ -247,9 +252,11 @@ struct ArticleDetailView: View {
     private func regionFlag(_ region: String) -> String {
         switch region.lowercased() {
         case "germany": return "🇩🇪"
+        case "austria": return "🇦🇹"
+        case "switzerland": return "🇨🇭"
         case "japan": return "🇯🇵"
-        case "us", "usa": return "🇺🇸"
-        case "uk": return "🇬🇧"
+        case "us", "usa", "united states": return "🇺🇸"
+        case "uk", "united kingdom": return "🇬🇧"
         case "france": return "🇫🇷"
         case "china": return "🇨🇳"
         case "korea", "south korea": return "🇰🇷"
@@ -268,7 +275,9 @@ struct ArticleDetailView: View {
                 articleId: article.id,
                 onWordTap: { word in
                     viewModel.selectedWord = word
-                }
+                },
+                // a word added from a lookup shows up in the article's word list at once
+                onWordAdded: { Task { await viewModel.reloadQuietly(id: article.id) } }
             )
         }
     }
@@ -281,7 +290,7 @@ struct ArticleDetailView: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 4)
         } label: {
-            Label("English Translation", systemImage: "globe")
+            Label(L("English Translation", "日本語訳"), systemImage: "globe")
                 .font(.headline)
         }
     }
@@ -289,7 +298,7 @@ struct ArticleDetailView: View {
     @ViewBuilder
     private func grammarSection(_ points: [GrammarPoint]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Grammar Points")
+            Text(L("Grammar Points", "文法のポイント"))
                 .font(.headline)
 
             ForEach(Array(points.enumerated()), id: \.offset) { _, point in
@@ -325,14 +334,14 @@ struct ArticleDetailView: View {
     @ViewBuilder
     private func vocabularySection(_ vocab: [VocabularyWord], writingSystem ws: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Vocabulary")
+            Text(L("Vocabulary", "単語"))
                 .font(.headline)
 
             let newWords = vocab.filter { $0.isNew?.value == true }
             let reviewWords = vocab.filter { $0.isReview?.value == true }
 
             if !newWords.isEmpty {
-                Text("New Words")
+                Text(L("New Words", "新しい単語"))
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.orange)
 
@@ -347,7 +356,7 @@ struct ArticleDetailView: View {
             }
 
             if !reviewWords.isEmpty {
-                Text("Review Words")
+                Text(L("Review Words", "復習の単語"))
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.blue)
                     .padding(.top, 4)
@@ -376,47 +385,47 @@ struct WordDetailSheet: View {
         NavigationStack {
             List {
                 Section {
-                    LabeledContent("Romaji", value: word.wordRomajiMacron)
+                    LabeledContent(L("Romaji", "単語"), value: word.wordRomajiMacron)
                     if let kanji = word.wordKanji {
                         LabeledContent("Kanji", value: kanji)
                     }
                     if let kana = word.wordKana {
                         LabeledContent("Reading", value: kana)
                     }
-                    LabeledContent("Meaning", value: word.meaningEn)
+                    LabeledContent(L("Meaning", "意味"), value: word.meaningEn)
                 }
 
                 Section {
-                    if let pos = word.partOfSpeech {
-                        LabeledContent("Part of Speech", value: pos)
+                    if let pos = word.partOfSpeech, !pos.isEmpty {
+                        LabeledContent(L("Part of Speech", "品詞"), value: Labels.partOfSpeech(pos))
                     }
                     if let level = word.jlptLevel {
-                        LabeledContent("JLPT Level", value: level)
+                        LabeledContent(L("JLPT Level", "レベル"), value: level)
                     }
                     if let cat = word.category {
                         LabeledContent("Category", value: cat.capitalized)
                     }
-                    LabeledContent("Status", value: word.status.capitalized)
+                    LabeledContent(L("Status", "状態"), value: Labels.status(word.status))
                 }
 
-                if let context = word.contextSentence {
-                    Section("Context") {
+                if let context = word.contextSentence, !context.isEmpty {
+                    Section(L("Context", "例文")) {
                         Text(context)
                             .font(.subheadline)
                     }
                 }
 
                 Section {
-                    LabeledContent("Times Seen", value: "\(word.timesSeen ?? 0)")
-                    LabeledContent("Times Tested", value: "\(word.timesTested ?? 0)")
-                    LabeledContent("Correct", value: "\(word.timesTestedCorrect ?? 0)")
+                    LabeledContent(L("Times Seen", "見た回数"), value: "\(word.timesSeen ?? 0)")
+                    LabeledContent(L("Times Tested", "テストした回数"), value: "\(word.timesTested ?? 0)")
+                    LabeledContent(L("Correct", "正解"), value: "\(word.timesTestedCorrect ?? 0)")
                 }
             }
             .navigationTitle(word.wordRomajiMacron)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button(L("Done", "完了")) { dismiss() }
                 }
             }
         }
@@ -440,14 +449,14 @@ struct WordLookupSheet: View {
                     let reviewWords = vocab.filter { $0.isReview?.value == true }
 
                     if !newWords.isEmpty {
-                        Section("New Words") {
+                        Section(L("New Words", "新しい単語")) {
                             ForEach(newWords) { word in
                                 wordRow(word)
                             }
                         }
                     }
                     if !reviewWords.isEmpty {
-                        Section("Review Words") {
+                        Section(L("Review Words", "復習の単語")) {
                             ForEach(reviewWords) { word in
                                 wordRow(word)
                             }
@@ -465,12 +474,12 @@ struct WordLookupSheet: View {
                     }
                 }
             }
-            .navigationTitle("Word Lookup")
+            .navigationTitle(L("Word Lookup", "単語を調べる"))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $viewModel.lookupQuery, prompt: "Search words or meanings...")
+            .searchable(text: $viewModel.lookupQuery, prompt: L("Search words or meanings...", "単語や意味で検索…"))
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button(L("Done", "完了")) { dismiss() }
                 }
             }
         }
@@ -501,8 +510,8 @@ struct WordLookupSheet: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                if let pos = word.partOfSpeech {
-                    Text(pos)
+                if let pos = word.partOfSpeech, !pos.isEmpty {
+                    Text(Labels.partOfSpeech(pos))
                         .font(.caption2)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)

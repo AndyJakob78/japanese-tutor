@@ -44,8 +44,8 @@ struct VocabularyCard: View {
                         .clipShape(Capsule())
                 }
 
-                if let pos = word.partOfSpeech {
-                    Text(pos)
+                if let pos = word.partOfSpeech, !pos.isEmpty {
+                    Text(Labels.partOfSpeech(pos))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -79,6 +79,10 @@ struct VocabularyCard: View {
         case "N3": return .orange
         case "N2": return .red
         case "N1": return .purple
+        case "A1-A2": return .green
+        case "B1": return .blue
+        case "B2": return .orange
+        case "C1+": return .red
         default: return .gray
         }
     }

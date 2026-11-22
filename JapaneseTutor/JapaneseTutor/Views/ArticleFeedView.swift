@@ -151,7 +151,7 @@ struct ArticleFeedView: View {
                             articleToDelete = article
                             showDeleteConfirmation = true
                         } label: {
-                            Label("Delete", systemImage: "trash")
+                            Label(L("Delete", "削除"), systemImage: "trash")
                         }
                     }
                 }
@@ -164,9 +164,9 @@ struct ArticleFeedView: View {
             .overlay {
                 if viewModel.articles.isEmpty && !viewModel.isLoading {
                     ContentUnavailableView(
-                        "No Articles Yet",
+                        L("No Articles Yet", "記事はまだありません"),
                         systemImage: "doc.text",
-                        description: Text("Tap + to generate your first article")
+                        description: Text(L("Tap + to generate your first article", "＋をタップして最初の記事を作成しましょう"))
                     )
                 }
             }
@@ -219,7 +219,17 @@ struct ArticleFeedView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.isGenerating)
-        .navigationTitle("Articles")
+        .navigationTitle(L("Articles", "記事"))
+        // The progress screen's "Read something new" lands here
+        .onChange(of: TabRouter.shared.wantsNewArticle, initial: true) { _, wanted in
+            guard wanted else { return }
+            TabRouter.shared.wantsNewArticle = false
+            if let status = viewModel.deviceStatus, !status.isPro, status.trialsRemaining == 0 {
+                viewModel.showPaywall = true
+            } else {
+                showGenerateSheet = true
+            }
+        }
         .task {
             await viewModel.loadArticles()
             await viewModel.loadDeviceStatus()
@@ -240,7 +250,7 @@ struct ArticleFeedView: View {
                 Task { await viewModel.loadDeviceStatus() }
             })
         }
-        .alert("Error", isPresented: .init(
+        .alert(L("Error", "エラー"), isPresented: .init(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }
         )) {
@@ -249,26 +259,26 @@ struct ArticleFeedView: View {
             Text(viewModel.errorMessage ?? "")
         }
         .confirmationDialog(
-            "Delete Article",
+            L("Delete Article", "記事を削除"),
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Delete article only", role: .destructive) {
+            Button(L("Delete article only", "記事だけを削除"), role: .destructive) {
                 if let article = articleToDelete {
                     Task { await viewModel.deleteArticle(id: article.id, deleteVocabulary: false) }
                 }
             }
-            Button("Delete article and its vocabulary", role: .destructive) {
+            Button(L("Delete article and its vocabulary", "記事と単語を削除"), role: .destructive) {
                 if let article = articleToDelete {
                     Task { await viewModel.deleteArticle(id: article.id, deleteVocabulary: true) }
                 }
             }
-            Button("Cancel", role: .cancel) {
+            Button(L("Cancel", "キャンセル"), role: .cancel) {
                 articleToDelete = nil
             }
         } message: {
             if let article = articleToDelete {
-                Text("Delete \"\(stripMarkers(article.titleRomaji))\"?\n\nYou can keep the vocabulary words for future review or delete them too.")
+                Text(L("Delete \"\(stripMarkers(article.titleRomaji))\"?\n\nYou can keep the vocabulary words for future review or delete them too.", "「\(stripMarkers(article.titleRomaji))」を削除しますか？\n\n単語は復習のために残すことも、一緒に削除することもできます。"))
             }
         }
     }
@@ -280,8 +290,8 @@ struct ArticleFeedView: View {
             Image(systemName: remaining > 0 ? "sparkles" : "lock.fill")
                 .font(.caption2)
             Text(remaining > 0
-                 ? "\(remaining) free \(remaining == 1 ? "article" : "articles") left"
-                 : "Upgrade to continue")
+                 ? L("\(remaining) free \(remaining == 1 ? "article" : "articles") left", "無料の記事 あと\(remaining)本")
+                 : L("Upgrade to continue", "続けるにはアップグレード"))
                 .font(.caption.weight(.medium))
         }
         .foregroundStyle(remaining > 0 ? Color.orange : Color.red)
@@ -305,7 +315,7 @@ struct ProUpsellBanner: View {
     /// Localized monthly price string (e.g. "$7.99/mo", "€8.99/mo", "¥1,300/mo")
     private var monthlyPrice: String? {
         guard let pkg = rc.monthlyPackage else { return nil }
-        return "\(pkg.localizedPriceString)/mo"
+        return L("\(pkg.localizedPriceString)/mo", "\(pkg.localizedPriceString)/月")
     }
 
     /// Localized annual per-month equivalent (e.g. "$5.83/mo", "€5.56/mo")
@@ -315,7 +325,7 @@ struct ProUpsellBanner: View {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.locale = annual.storeProduct.priceFormatter?.locale ?? .current
-        return formatter.string(from: perMonth as NSDecimalNumber).map { "\($0)/mo" }
+        return formatter.string(from: perMonth as NSDecimalNumber).map { L("\($0)/mo", "\($0)/月") }
     }
 
     /// Savings percentage: how much cheaper annual is vs 12x monthly
@@ -325,7 +335,7 @@ struct ProUpsellBanner: View {
         let annualPrice = (annual.storeProduct.price as NSDecimalNumber).doubleValue
         guard yearlyIfMonthly > 0 else { return nil }
         let pct = Int(((yearlyIfMonthly - annualPrice) / yearlyIfMonthly * 100.0).rounded())
-        return pct > 0 ? "Save \(pct)%" : nil
+        return pct > 0 ? L("Save \(pct)%", "\(pct)%お得") : nil
     }
 
     var body: some View {
@@ -336,7 +346,7 @@ struct ProUpsellBanner: View {
                     Image(systemName: "star.fill")
                         .font(.subheadline)
                         .foregroundStyle(.yellow)
-                    Text("Upgrade to Pro")
+                    Text(L("Upgrade to Pro", "Proにアップグレード"))
                         .font(.subheadline.weight(.bold))
                     Spacer()
                     Image(systemName: "chevron.right")
@@ -345,7 +355,7 @@ struct ProUpsellBanner: View {
                 }
 
                 // Value proposition
-                Text("Unlimited articles, vocabulary tracking, and quizzes. Learn at your own pace with fresh news every day.")
+                Text(L("Unlimited articles, vocabulary tracking, and quizzes. Learn at your own pace with fresh news every day.", "記事は無制限、単語の記録とクイズつき。毎日の新しいニュースで、自分のペースで学べます。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -355,7 +365,7 @@ struct ProUpsellBanner: View {
                     HStack(spacing: 16) {
                         // Monthly
                         VStack(spacing: 2) {
-                            Text("Monthly")
+                            Text(L("Monthly", "月額"))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                             Text(monthlyPrice ?? "")
@@ -368,7 +378,7 @@ struct ProUpsellBanner: View {
 
                         // Annual — highlighted
                         VStack(spacing: 2) {
-                            Text("Annual")
+                            Text(L("Annual", "年額"))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                             Text(annualPerMonth ?? "")
@@ -390,13 +400,13 @@ struct ProUpsellBanner: View {
                     }
                 } else {
                     // Prices not yet loaded — show generic prompt
-                    Text("Monthly and annual plans available. Save with annual.")
+                    Text(L("Monthly and annual plans available. Save with annual.", "月額と年額のプランがあります。年額がお得です。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 // Cancel note
-                Text("Cancel anytime. No commitment.")
+                Text(L("Cancel anytime. No commitment.", "いつでも解約できます。"))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -415,28 +425,31 @@ struct GenerateArticleSheet: View {
     /// Used by ArticleFeedView to trigger the StoreKit review prompt at the right moment.
     var onSuccess: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedLevel = "N3"
+    @State private var selectedLevel = LearningLanguage.current.isJapanese ? "N3" : LearningLanguage.current.defaultLevel
     @State private var newWordsCount = 12
     @State private var targetWordCount = 200
     @State private var selectedWritingSystem = "romaji"
     @State private var customTopic = ""
     @State private var configLoaded = false
 
-    let levels = ["N5", "N4", "N3", "N2", "N1"]
+    let levels = LearningLanguage.current.levels
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Writing System") {
-                    Picker("Writing System", selection: $selectedWritingSystem) {
-                        Text("Romaji").tag("romaji")
-                        Text("\u{3072}\u{3089}\u{304C}\u{306A}").tag("kana")
-                        Text("\u{6F22}\u{5B57}").tag("kanji")
+                // German and English have one script; the choice is for Japanese only
+                if LearningLanguage.current.isJapanese {
+                    Section("Writing System") {
+                        Picker("Writing System", selection: $selectedWritingSystem) {
+                            Text("Romaji").tag("romaji")
+                            Text("\u{3072}\u{3089}\u{304C}\u{306A}").tag("kana")
+                            Text("\u{6F22}\u{5B57}").tag("kanji")
+                        }
+                        .pickerStyle(.segmented)
                     }
-                    .pickerStyle(.segmented)
                 }
 
-                Section("JLPT Level") {
+                Section(L("JLPT Level", "レベル")) {
                     Picker("Level", selection: $selectedLevel) {
                         ForEach(levels, id: \.self) { level in
                             Text(level).tag(level)
@@ -445,21 +458,21 @@ struct GenerateArticleSheet: View {
                     .pickerStyle(.segmented)
                 }
 
-                Section("Article Length") {
-                    Stepper("\(targetWordCount) words", value: $targetWordCount, in: 100...500, step: 50)
+                Section(L("Article Length", "記事の長さ")) {
+                    Stepper(L("\(targetWordCount) words", "\(targetWordCount)語"), value: $targetWordCount, in: 100...500, step: 50)
                 }
 
-                Section("New Words") {
-                    Stepper(newWordsCount == 0 ? "No new words (review only)" : "\(newWordsCount) new words", value: $newWordsCount, in: 0...25)
+                Section(L("New Words", "新しい単語")) {
+                    Stepper(newWordsCount == 0 ? L("No new words (review only)", "新しい単語なし (復習のみ)") : L("\(newWordsCount) new words", "新しい単語 \(newWordsCount)語"), value: $newWordsCount, in: 0...25)
                 }
 
                 Section {
-                    TextField("e.g. Tokyo Olympics, AI startups...", text: $customTopic)
+                    TextField(L("e.g. Tokyo Olympics, AI startups...", "例: サッカー、AI、宇宙…"), text: $customTopic)
                         .textInputAutocapitalization(.never)
                 } header: {
-                    Text("Topic (Optional)")
+                    Text(L("Topic (Optional)", "テーマ (任意)"))
                 } footer: {
-                    Text("Leave empty to get a random news article from your interests.")
+                    Text(L("Leave empty to get a random news article from your interests.", "空欄のままにすると、設定したテーマからニュースを選びます。"))
                 }
 
                 Section {
@@ -481,18 +494,18 @@ struct GenerateArticleSheet: View {
                         }
                         dismiss()
                     } label: {
-                        Label("Generate Article", systemImage: "sparkles")
+                        Label(L("Generate Article", "記事を作成"), systemImage: "sparkles")
                     }
                     .disabled(viewModel.isGenerating)
                 } footer: {
-                    Text("Takes 1–3 minutes. You can leave the app while it works.")
+                    Text(L("Takes 1–3 minutes. You can leave the app while it works.", "1〜3分かかります。その間、アプリを閉じても大丈夫です。"))
                 }
             }
-            .navigationTitle("New Article")
+            .navigationTitle(L("New Article", "新しい記事"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(L("Cancel", "キャンセル")) { dismiss() }
                 }
             }
             .task {

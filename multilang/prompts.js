@@ -36,17 +36,21 @@ const STORY_FIT = {
   B2: 'The reader is at upper-intermediate level. Any general-interest story works; avoid specialist papers.',
 };
 
-function searchPrompts(lang, topicHint, recentTopics = [], level = 'B1') {
+function searchPrompts(lang, topicHint, recentTopics = [], level = 'B1', where = {}) {
   const today = new Date().toISOString().split('T')[0];
+  const days = where.days || 10;
+  const window = days <= 1 ? 'the last 24 hours' : `the last ${days} days`;
+  // the learner's own regions; without any, the language's home region
+  const place = (where.regions || []).length ? `these places (from them or about them): ${where.regions.join(', ')}` : lang.newsRegion;
   return {
-    system: `You find one current news story for a language-learning article. Search the web, pick ONE concrete story from the last 10 days with clear facts (who, what, where, when, numbers). Prefer stories that are easy to tell in simple words: society, technology, science, culture, transport, sport, weather. Avoid crime details, war, protests and party politics.
+    system: `You find one current news story for a language-learning article. Search the web, pick ONE concrete story from ${window} with clear facts (who, what, where, when, numbers). Prefer stories that are easy to tell in simple words: society, technology, science, culture, transport, sport, weather. Avoid crime details, war, protests and party politics.
 - Use established news outlets or the organisation's own announcement; no blogs, no partisan sites.
 - Only report facts you actually read in the search results. If you could read only a headline, pick another story.
 - Check that weekday and date fit together; leave the weekday out if unsure.
 - You have a limited number of searches. Take the FIRST story that fits; do not keep looking for a better one. Search results (titles and snippets from several outlets) count as read when they give the facts.
 Return ONLY JSON:
 {"topic": "one sentence", "region": "...", "category": "...", "articles": [{"headline": "...", "source": "...", "url": "...", "date": "YYYY-MM-DD", "keyFacts": ["6-10 short facts in English"], "numbers": ["..."], "quotes": ["short quotes with the speaker"]}]}`,
-    user: `Today is ${today}. Find a news story from ${lang.newsRegion}.${topicHint ? ` Topic wish: ${topicHint}.` : ''} Use 1-2 sources.\n${STORY_FIT[level] || ''}${topicHint && level === 'A1-A2' ? ' If the topic wish only offers hard stories, take an easy story from another topic.' : ''}` +
+    user: `Today is ${today}. Find a news story from ${place}.${days < 4 ? ' If nothing fits in that time, take the most recent story that does.' : ''}${topicHint ? ` Topic wish: ${topicHint}.` : ''} Use 1-2 sources.\n${STORY_FIT[level] || ''}${topicHint && level === 'A1-A2' ? ' If the topic wish only offers hard stories, take an easy story from another topic.' : ''}` +
       (recentTopics.length ? `\nThe learner already read about these — pick a DIFFERENT story:\n${recentTopics.slice(0, 10).map(t => `- ${t}`).join('\n')}` : ''),
   };
 }
@@ -64,10 +68,12 @@ ${STORY_RULES}
 
 ${FACT_RULES}
 
-## New words
+${L.newWords[1] === 0 ? `## No new words
+- The learner asked for an article WITHOUT new words. Use only words a learner at ${level} already knows, plus the words listed in the message. Never write [NEW]. "vocabulary" is [].
+- If the story needs a harder word, say it with easy words instead.` : `## New words
 - Mark the ${L.newWords[0]}-${L.newWords[1]} words a learner at ${level} most likely does not know with [NEW] directly before the word, the first time it appears: "Die [NEW] Regierung plant ...". Never mark names.
 - Every marked word gets one vocabulary entry; nothing else goes into the vocabulary.
-- ${lang.vocabFormat}
+- ${lang.vocabFormat}`}
 
 ## Japanese parts (the learner reads these)
 - "translation_ja": the whole article in natural Japanese (です・ます体), sentence by sentence in the same order, same paragraphs. Faithful: nothing added, nothing left out. Foreign names in katakana.
@@ -133,14 +139,17 @@ ${lintBlock ? `\n${lintBlock}\n` : ''}`,
   };
 }
 
-function quizPrompts(lang, level, article) {
+function quizPrompts(lang, level, article, count = 6) {
+  // the three kinds in turn: 6 → 2 + 2 + 2, 7 → 3 + 2 + 2, 3 → 1 + 1 + 1
+  const n = [0, 1, 2].map(k => Math.floor((count + 2 - k) / 3));
+  const span = (from, k) => (k === 1 ? `${from}.` : k === 2 ? `${from}. and ${from + 1}.` : `${from}. to ${from + k - 1}.`);
   return {
-    system: `You write a 6-question multiple-choice quiz for a ${lang.name} learner article. The learner is a Japanese speaker at level ${level}.
+    system: `You write a ${count}-question multiple-choice quiz for a ${lang.name} learner article. The learner is a Japanese speaker at level ${level}.
 
 Questions, in this order:
-1. and 2. "comprehension": a question about the content, in ${lang.name} inside level ${level}; four options in ${lang.name}.
-3. and 4. "vocabulary": "question" is the sentence from the article with the tested word in 【 】 ("Its data show 【wildfires】, dust and smoke."); the four options are Japanese meanings; "instruction_ja" is 「【 】の単語の意味を選んでください。」 (never "underlined" — the app cannot underline). Two different words; if the article has a [REVIEW] word, one question uses it.
-5. and 6. "grammar": a sentence from the article with ONE gap (____); four options in ${lang.name}. Test: ${lang.quizGrammar}. Two different points. Exactly one option may be correct.
+${span(1, n[0])} "comprehension": a question about the content, in ${lang.name} inside level ${level}; four options in ${lang.name}.
+${span(1 + n[0], n[1])} "vocabulary": "question" is the sentence from the article with the tested word in 【 】 ("Its data show 【wildfires】, dust and smoke."); the four options are Japanese meanings; "instruction_ja" is 「【 】の単語の意味を選んでください。」 (never "underlined" — the app cannot underline). Each question a different word; if the article has a [REVIEW] word, one question uses it. If the vocabulary list below is empty, take useful words from the article.
+${span(1 + n[0] + n[1], n[2])} "grammar": a sentence from the article with ONE gap (____); four options in ${lang.name}. Test: ${lang.quizGrammar}. Each question a different point. Exactly one option may be correct.
 
 Rules:
 - The right answer must be decidable from the article alone, and only one option is right.

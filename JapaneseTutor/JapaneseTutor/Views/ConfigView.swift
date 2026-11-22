@@ -8,7 +8,7 @@ class ConfigViewModel {
     var errorMessage: String?
     var savedMessage: String?
 
-    let levels = ["N5", "N4", "N3", "N2", "N1"]
+    let levels = LearningLanguage.current.levels
 
     func loadConfig() async {
         isLoading = true
@@ -36,7 +36,7 @@ class ConfigViewModel {
                 "writing_system": config.writingSystem,
             ]
             try await APIClient.shared.updateConfig(updates)
-            savedMessage = "Settings saved"
+            savedMessage = L("Settings saved", "設定を保存しました")
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -96,33 +96,35 @@ struct ConfigView: View {
         Form {
             if viewModel.isLoading {
                 Section {
-                    ProgressView("Loading settings...")
+                    ProgressView(L("Loading settings...", "設定を読み込んでいます…"))
                 }
             } else {
                 // Learning language (German / English have their own screens)
                 Section {
-                    LearningLanguagePicker(title: "Learning language")
+                    LearningLanguagePicker(title: L("Learning language", "学習する言語"))
                 } footer: {
-                    Text("German and English are for Japanese speakers; their screens are in Japanese.")
+                    Text(L("German and English are for Japanese speakers; their screens are in Japanese. Each language keeps its own articles, words and settings.", "言語ごとに、記事・単語・設定は別々に保存されます。"))
                 }
 
-                // Writing System
-                Section {
-                    Picker("Writing System", selection: $viewModel.config.writingSystem) {
-                        Text("Romaji").tag("romaji")
-                        Text("\u{3072}\u{3089}\u{304C}\u{306A}").tag("kana")
-                        Text("\u{6F22}\u{5B57}").tag("kanji")
+                // Writing System — Japanese only (German and English have one script)
+                if LearningLanguage.current.isJapanese {
+                    Section {
+                        Picker("Writing System", selection: $viewModel.config.writingSystem) {
+                            Text("Romaji").tag("romaji")
+                            Text("\u{3072}\u{3089}\u{304C}\u{306A}").tag("kana")
+                            Text("\u{6F22}\u{5B57}").tag("kanji")
+                        }
+                        .pickerStyle(.segmented)
+                    } header: {
+                        Text("Writing System")
+                    } footer: {
+                        Text("Romaji for beginners, Kana for intermediate, Kanji for advanced learners.")
                     }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Writing System")
-                } footer: {
-                    Text("Romaji for beginners, Kana for intermediate, Kanji for advanced learners.")
                 }
 
-                // JLPT Level
-                Section("Proficiency Level") {
-                    Picker("JLPT Level", selection: $viewModel.config.proficiencyLevel) {
+                // Level (JLPT for Japanese, A1–B2 for German / English)
+                Section(L("Proficiency Level", "レベル")) {
+                    Picker(L("JLPT Level", "レベル"), selection: $viewModel.config.proficiencyLevel) {
                         ForEach(viewModel.levels, id: \.self) { level in
                             Text(level).tag(level)
                         }
@@ -135,6 +137,7 @@ struct ConfigView: View {
                     ForEach(Array(viewModel.config.topics.enumerated()), id: \.offset) { index, topic in
                         EditableListRow(
                             value: topic,
+                            display: Labels.topic,
                             onSave: { newValue in
                                 viewModel.updateTopic(at: index, with: newValue)
                             }
@@ -145,14 +148,14 @@ struct ConfigView: View {
                     }
 
                     if viewModel.config.topics.count < 10 {
-                        AddItemRow(placeholder: "e.g. sports, art, food...") { newTopic in
+                        AddItemRow(placeholder: L("e.g. sports, art, food...", "例: スポーツ、アート、食べ物…")) { newTopic in
                             viewModel.addTopic(newTopic)
                         }
                     }
                 } header: {
-                    Text("Topics of Interest")
+                    Text(L("Topics of Interest", "興味のあるテーマ"))
                 } footer: {
-                    Text("\(viewModel.config.topics.count)/10 topics. Swipe to delete, tap to edit.")
+                    Text(L("\(viewModel.config.topics.count)/10 topics. Swipe to delete, tap to edit.", "\(viewModel.config.topics.count)/10 テーマ。スワイプで削除、タップで編集。"))
                 }
 
                 // Regions — editable list
@@ -160,6 +163,7 @@ struct ConfigView: View {
                     ForEach(Array(viewModel.config.regions.enumerated()), id: \.offset) { index, region in
                         EditableListRow(
                             value: region,
+                            display: Labels.region,
                             onSave: { newValue in
                                 viewModel.updateRegion(at: index, with: newValue)
                             }
@@ -170,20 +174,20 @@ struct ConfigView: View {
                     }
 
                     if viewModel.config.regions.count < 10 {
-                        AddItemRow(placeholder: "e.g. Tokyo, Bavaria, California...") { newRegion in
+                        AddItemRow(placeholder: L("e.g. Tokyo, Bavaria, California...", "例: 東京、バイエルン、カリフォルニア…")) { newRegion in
                             viewModel.addRegion(newRegion)
                         }
                     }
                 } header: {
-                    Text("Regions")
+                    Text(L("Regions", "地域"))
                 } footer: {
-                    Text("\(viewModel.config.regions.count)/10 regions. Can be a country, state, prefecture, or city.")
+                    Text(L("\(viewModel.config.regions.count)/10 regions. Can be a country, state, prefecture, or city.", "\(viewModel.config.regions.count)/10 地域。国、州、都道府県、都市を指定できます。"))
                 }
 
                 // Article settings
-                Section("Article") {
+                Section(L("Article", "記事")) {
                     Stepper(
-                        "Article length: \(viewModel.config.targetWordCount) words",
+                        L("Article length: \(viewModel.config.targetWordCount) words", "記事の長さ: \(viewModel.config.targetWordCount)語"),
                         value: $viewModel.config.targetWordCount,
                         in: 100...500,
                         step: 50
@@ -191,9 +195,9 @@ struct ConfigView: View {
                 }
 
                 // Vocabulary settings
-                Section("Vocabulary") {
+                Section(L("Vocabulary", "単語")) {
                     HStack {
-                        Text("New words per article")
+                        Text(L("New words per article", "1記事あたりの新しい単語"))
                         Spacer()
                         Text("\(viewModel.config.newWordsPerArticle)")
                             .foregroundStyle(.secondary)
@@ -207,15 +211,15 @@ struct ConfigView: View {
                         step: 1
                     )
                     Text(viewModel.config.newWordsPerArticle == 0
-                         ? "0 = no new words. Articles use only words you have met before, with more review words."
-                         : "Fewer new words means more review words from your earlier articles.")
+                         ? L("0 = no new words. Articles use only words you have met before, with more review words.", "0 = 新しい単語なし。これまでに出会った単語だけで記事を書き、復習の単語を増やします。")
+                         : L("Fewer new words means more review words from your earlier articles.", "新しい単語を減らすと、以前の記事の単語を復習する機会が増えます。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     HStack {
-                        Text("Max sentence length")
+                        Text(L("Max sentence length", "1文の長さ (最大)"))
                         Spacer()
-                        Text("\(viewModel.config.maxSentenceLength) words")
+                        Text(L("\(viewModel.config.maxSentenceLength) words", "\(viewModel.config.maxSentenceLength)語"))
                             .foregroundStyle(.secondary)
                     }
                     Slider(
@@ -223,12 +227,12 @@ struct ConfigView: View {
                             get: { Double(viewModel.config.maxSentenceLength) },
                             set: { viewModel.config.maxSentenceLength = Int($0) }
                         ),
-                        in: 10...25,
+                        in: LearningLanguage.current.isJapanese ? 10...25 : 8...30,
                         step: 1
                     )
 
                     HStack {
-                        Text("Vocabulary reuse ratio")
+                        Text(L("Vocabulary reuse ratio", "単語を再利用する割合"))
                         Spacer()
                         Text("\(Int(viewModel.config.reuseRatio * 100))%")
                             .foregroundStyle(.secondary)
@@ -237,18 +241,18 @@ struct ConfigView: View {
                 }
 
                 // Quiz settings
-                Section("Quiz") {
+                Section(L("Quiz", "クイズ")) {
                     Stepper(
-                        "Questions per quiz: \(viewModel.config.quizQuestionsCount)",
+                        L("Questions per quiz: \(viewModel.config.quizQuestionsCount)", "クイズの問題数: \(viewModel.config.quizQuestionsCount)"),
                         value: $viewModel.config.quizQuestionsCount,
                         in: 3...15
                     )
                 }
 
                 // News settings
-                Section("News") {
+                Section(L("News", "ニュース")) {
                     Stepper(
-                        "Timeframe: \(viewModel.config.newsTimeframeHours)h",
+                        L("Timeframe: \(viewModel.config.newsTimeframeHours)h", "ニュースの期間: \(viewModel.config.newsTimeframeHours)時間"),
                         value: $viewModel.config.newsTimeframeHours,
                         in: 12...168,
                         step: 12
@@ -266,7 +270,7 @@ struct ConfigView: View {
                                 ProgressView()
                                     .padding(.trailing, 8)
                             }
-                            Text("Save Settings")
+                            Text(L("Save Settings", "設定を保存"))
                                 .fontWeight(.semibold)
                             Spacer()
                         }
@@ -275,11 +279,11 @@ struct ConfigView: View {
                 }
             }
         }
-        .navigationTitle("Settings")
+        .navigationTitle(L("Settings", "設定"))
         .task {
             await viewModel.loadConfig()
         }
-        .alert("Saved", isPresented: .init(
+        .alert(L("Saved", "保存しました"), isPresented: .init(
             get: { viewModel.savedMessage != nil },
             set: { if !$0 { viewModel.savedMessage = nil } }
         )) {
@@ -295,6 +299,8 @@ struct ConfigView: View {
 /// A row that displays a value and lets the user tap to edit it inline.
 private struct EditableListRow: View {
     let value: String
+    /// How the stored value is shown (topics and regions get Japanese names on the German / English screens)
+    var display: (String) -> String = { $0.capitalized }
     let onSave: (String) -> Void
 
     @State private var isEditing = false
@@ -303,7 +309,7 @@ private struct EditableListRow: View {
     var body: some View {
         if isEditing {
             HStack {
-                TextField("Enter value", text: $editText)
+                TextField(L("Enter value", "入力してください"), text: $editText)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .onSubmit {
@@ -311,7 +317,7 @@ private struct EditableListRow: View {
                         isEditing = false
                     }
 
-                Button("Done") {
+                Button(L("Done", "完了")) {
                     onSave(editText)
                     isEditing = false
                 }
@@ -323,7 +329,7 @@ private struct EditableListRow: View {
                 editText = value
                 isEditing = true
             } label: {
-                Text(value.capitalized)
+                Text(display(value))
                     .foregroundStyle(.primary)
             }
         }

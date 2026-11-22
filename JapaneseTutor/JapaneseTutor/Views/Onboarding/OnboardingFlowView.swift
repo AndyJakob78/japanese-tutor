@@ -6,7 +6,8 @@ import SwiftUI
 class OnboardingViewModel {
     // Step tracking
     var currentStep: Int = 0
-    let totalSteps = 4
+    /// Japanese has a fourth step (writing system); German and English have one script.
+    let totalSteps = LearningLanguage.current.isJapanese ? 4 : 3
 
     // Step 1 — Topics (max 8)
     var selectedTopics: Set<String> = []
@@ -17,7 +18,7 @@ class OnboardingViewModel {
     var customRegionInput: String = ""
 
     // Step 3 — JLPT Level (always has a value)
-    var selectedLevel: String = "N5"
+    var selectedLevel: String = LearningLanguage.current.defaultLevel
 
     // Step 4 — Writing System (always has a value)
     var selectedWritingSystem: String = "romaji"
@@ -36,11 +37,18 @@ class OnboardingViewModel {
         "science", "culture", "environment", "health"
     ]
 
-    let predefinedRegions = [
-        "Japan", "Germany", "United States", "France",
-        "United Kingdom", "South Korea", "China",
-        "Brazil", "India", "Australia"
-    ]
+    /// The countries of the language first: German news comes from Germany,
+    /// Austria and Switzerland, English news from the English-speaking world.
+    let predefinedRegions: [String] = {
+        switch LearningLanguage.current {
+        case .japanese:
+            return ["Japan", "Germany", "United States", "France", "United Kingdom", "South Korea", "China", "Brazil", "India", "Australia"]
+        case .german:
+            return ["Germany", "Austria", "Switzerland", "Japan", "Europe", "United States", "France", "United Kingdom"]
+        case .english:
+            return ["United States", "United Kingdom", "Australia", "Canada", "Ireland", "Japan", "India", "Europe"]
+        }
+    }()
 
     // MARK: Validation — Continue button is enabled when this is true
 
@@ -100,11 +108,17 @@ class OnboardingViewModel {
         switch currentStep {
         case 0:
             if selectedTopics.isEmpty {
-                selectedTopics = ["politics", "technology", "finance", "sport"]
+                selectedTopics = LearningLanguage.current.isJapanese
+                    ? ["politics", "technology", "finance", "sport"]
+                    : ["science", "technology", "culture", "sport"]   // easy to tell in simple words
             }
         case 1:
             if selectedRegions.isEmpty {
-                selectedRegions = ["japan", "germany", "united states"]
+                switch LearningLanguage.current {
+                case .japanese: selectedRegions = ["japan", "germany", "united states"]
+                case .german:   selectedRegions = ["germany", "austria", "switzerland"]
+                case .english:  selectedRegions = ["united states", "united kingdom"]
+                }
             }
         default:
             break   // level and writing system already have defaults
@@ -223,7 +237,7 @@ struct OnboardingFlowView: View {
                     if vm.isSaving {
                         ProgressView().tint(.white)
                     } else {
-                        Text(vm.currentStep == vm.totalSteps - 1 ? "Get Started" : "Continue")
+                        Text(vm.currentStep == vm.totalSteps - 1 ? L("Get Started", "はじめる") : L("Continue", "次へ"))
                             .font(.headline)
                     }
                 }
@@ -244,7 +258,7 @@ struct OnboardingFlowView: View {
             Button {
                 handleSkip()
             } label: {
-                Text("Skip")
+                Text(L("Skip", "スキップ"))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
@@ -326,7 +340,7 @@ struct CelebrationView: View {
                             .scaleEffect(checkScale)
                     }
 
-                    Text("Well done! 🎉")
+                    Text(L("Well done! 🎉", "いいですね！🎉"))
                         .font(.title3.weight(.bold))
                         .opacity(textOpacity)
                 }
@@ -357,6 +371,8 @@ struct CelebrationView: View {
 
 struct ChipGridView: View {
     let items: [String]
+    /// How an item is shown (topics and regions get Japanese names on the German / English screens)
+    var label: (String) -> String = { $0.capitalized }
     let isSelected: (String) -> Bool
     let isDisabled: (String) -> Bool
     let onTap: (String) -> Void
@@ -369,9 +385,10 @@ struct ChipGridView: View {
                 Button {
                     onTap(item)
                 } label: {
-                    Text(item.capitalized)
+                    Text(label(item))
                         .font(.subheadline.weight(.medium))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                         .frame(maxWidth: .infinity)

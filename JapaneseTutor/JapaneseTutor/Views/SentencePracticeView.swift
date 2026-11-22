@@ -33,7 +33,8 @@ class SentencePracticeViewModel {
     /// needs a particle choice around a verb.
     func setUp(vocabulary: [VocabularyWord]) {
         guard rounds.isEmpty else { return }
-        let usable = vocabulary.filter { !$0.wordRomajiMacron.contains(" ") }
+        // Japanese: one-word entries only. German / English dictionary forms have spaces ("die Regierung, -en").
+        let usable = vocabulary.filter { !LearningLanguage.current.isJapanese || !$0.wordRomajiMacron.contains(" ") }
         var verbs = usable.filter { VocabQuizViewModel.kind(of: $0) == .verb }.shuffled()
         var others = usable.filter { VocabQuizViewModel.kind(of: $0) != .verb }.shuffled()
         for _ in 0..<Self.roundCount {
@@ -68,13 +69,13 @@ class SentencePracticeViewModel {
             // count the first attempt of each round towards the word's streak.
             if firstTry {
                 for use in result.words {
-                    if let word = round.words.first(where: { $0.wordRomajiMacron.lowercased() == use.word.lowercased() }) {
+                    if let word = round.words.first(where: { Self.sameWord($0, use.word) }) {
                         _ = try? await APIClient.shared.recordTestResult(id: word.id, correct: use.usedCorrectly, mode: "sentence")
                     }
                 }
             }
         } catch {
-            errorMessage = "Couldn't check the sentence. Please try again."
+            errorMessage = L("Couldn't check the sentence. Please try again.", "チェックできませんでした。もう一度お試しください。")
         }
         isChecking = false
     }
@@ -82,6 +83,16 @@ class SentencePracticeViewModel {
     func next() {
         currentIndex += 1
         sentence = ""
+    }
+
+    /// Is `answered` (the word as the check names it) this vocabulary word?
+    static func sameWord(_ word: VocabularyWord, _ answered: String) -> Bool {
+        let a = answered.lowercased()
+        if word.wordRomajiMacron.lowercased() == a { return true }
+        guard !LearningLanguage.current.isJapanese else { return false }
+        // "die Regierung, -en" is named as written, or as "Regierung"
+        let head = WordAnswer.parts(word.wordRomajiMacron).headword.lowercased()
+        return a == head || a.contains(head) || WordAnswer.parts(answered).headword.lowercased() == head
     }
 }
 
@@ -100,15 +111,15 @@ struct SentencePracticeView: View {
                     roundView(round)
                 } else {
                     ContentUnavailableView(
-                        "Not enough words",
+                        L("Not enough words", "単語が足りません"),
                         systemImage: "text.badge.xmark",
-                        description: Text("This article has no vocabulary to practise with.")
+                        description: Text(L("This article has no vocabulary to practise with.", "この記事には練習できる単語がありません。"))
                     )
                 }
             }
             .padding()
         }
-        .navigationTitle("Build Sentences")
+        .navigationTitle(L("Build Sentences", "文を作る"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { viewModel.setUp(vocabulary: article.vocabulary ?? []) }
         .task { await viewModel.loadFocus() }
@@ -118,11 +129,11 @@ struct SentencePracticeView: View {
 
     @ViewBuilder
     private func roundView(_ round: SentencePracticeViewModel.Round) -> some View {
-        Text("Sentence \(viewModel.currentIndex + 1) of \(viewModel.rounds.count)")
+        Text(L("Sentence \(viewModel.currentIndex + 1) of \(viewModel.rounds.count)", "\(viewModel.rounds.count)文中 \(viewModel.currentIndex + 1)文目"))
             .font(.caption)
             .foregroundStyle(.secondary)
 
-        Text("Write one sentence that uses \(round.words.count == 1 ? "this word" : "both words"):")
+        Text(L("Write one sentence that uses \(round.words.count == 1 ? "this word" : "both words"):", "\(round.words.count == 1 ? "この単語" : "2つの単語")を使って、\(LearningLanguage.current.targetName)で文を1つ書いてください:"))
             .font(.headline)
 
         if let focus = viewModel.focus {
@@ -138,7 +149,7 @@ struct SentencePracticeView: View {
             }
         }
 
-        TextField("e.g. Yachin ga agatta node, …", text: $viewModel.sentence, axis: .vertical)
+        TextField(L("e.g. Yachin ga agatta node, …", "ここに文を書く"), text: $viewModel.sentence, axis: .vertical)
             .lineLimit(3...6)
             .textInputAutocapitalization(.sentences)
             .autocorrectionDisabled()
@@ -147,9 +158,15 @@ struct SentencePracticeView: View {
             .background(Color(.systemGray6))
             .clipShape(RoundedRectangle(cornerRadius: 10))
 
-        Text("Romaji is fine — no need for macrons (ā, ō).")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+        if LearningLanguage.current.isJapanese {
+            Text("Romaji is fine — no need for macrons (ā, ō).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else if LearningLanguage.current == .german {
+            Text("ä ö ü ß は ae / oe / ue / ss と書いてもかまいません。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
 
         Button {
             isEditing = false
@@ -157,7 +174,7 @@ struct SentencePracticeView: View {
         } label: {
             HStack {
                 if viewModel.isChecking { ProgressView().tint(.white) }
-                Text(viewModel.isChecking ? "Checking…" : (round.result == nil ? "Check" : "Check again"))
+                Text(viewModel.isChecking ? L("Checking…", "チェック中…") : (round.result == nil ? L("Check", "チェックする") : L("Check again", "もう一度チェック")))
                     .font(.headline)
             }
             .frame(maxWidth: .infinity)
@@ -180,7 +197,7 @@ struct SentencePracticeView: View {
             Button {
                 viewModel.next()
             } label: {
-                Text(viewModel.currentIndex + 1 >= viewModel.rounds.count ? "Finish" : "Next sentence")
+                Text(viewModel.currentIndex + 1 >= viewModel.rounds.count ? L("Finish", "終わる") : L("Next sentence", "次の文"))
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -195,10 +212,10 @@ struct SentencePracticeView: View {
 
     private func focusCard(_ spot: WeakSpot) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label("Watch out: \(spot.pattern)", systemImage: "scope")
+            Label(L("Watch out: \(spot.pattern)", "気をつけましょう: \(spot.pattern)"), systemImage: "scope")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.orange)
-            Text("Before: \(spot.example.wrote) → \(spot.example.correct). \(spot.example.why)")
+            Text(L("Before: \(spot.example.wrote) → \(spot.example.correct). \(spot.example.why)", "前回: \(spot.example.wrote) → \(spot.example.correct)　\(spot.example.why)"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -224,8 +241,8 @@ struct SentencePracticeView: View {
             if !result.fixes.isEmpty {
                 VStack(spacing: 0) {
                     HStack {
-                        Text("You wrote ❌").frame(maxWidth: .infinity, alignment: .leading)
-                        Text("Correct ✅").frame(maxWidth: .infinity, alignment: .leading)
+                        Text(L("You wrote ❌", "あなたの文 ❌")).frame(maxWidth: .infinity, alignment: .leading)
+                        Text(L("Correct ✅", "正しい形 ✅")).frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -273,9 +290,9 @@ struct SentencePracticeView: View {
 
     private func verdictTitle(_ v: String) -> String {
         switch v {
-        case "correct": return "Perfect!"
-        case "almost": return "Almost — small fix"
-        default: return "Let's fix this"
+        case "correct": return L("Perfect!", "正しい文です！")
+        case "almost": return L("Almost — small fix", "おしい！少しだけ直しましょう")
+        default: return L("Let's fix this", "直してみましょう")
         }
     }
 
@@ -304,18 +321,18 @@ struct SentencePracticeView: View {
             Image(systemName: perfect == viewModel.rounds.count ? "star.fill" : "text.badge.checkmark")
                 .font(.system(size: 56))
                 .foregroundStyle(perfect == viewModel.rounds.count ? .yellow : .accentColor)
-            Text("\(perfect) of \(viewModel.rounds.count) perfect")
+            Text(L("\(perfect) of \(viewModel.rounds.count) perfect", "\(viewModel.rounds.count)文中 \(perfect)文が完璧"))
                 .font(.title2.weight(.bold))
-            Text("Every sentence you write yourself makes these words stick better than reading them.")
+            Text(L("Every sentence you write yourself makes these words stick better than reading them.", "自分で文を書くと、読むだけよりも単語がしっかり身につきます。"))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
             if viewModel.rounds.contains(where: { !($0.result?.fixes.isEmpty ?? true) }) {
-                Text("Your corrections are saved in My Mistakes. Your next articles will practise them, and the next session starts with your most common one.")
+                Text(L("Your corrections are saved in My Mistakes. Your next articles will practise them, and the next session starts with your most common one.", "直されたところは「間違いノート」に保存されました。次の記事で練習でき、次回は一番多い間違いから始まります。"))
                     .font(.callout)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
             }
-            Button("Done") { dismiss() }
+            Button(L("Done", "完了")) { dismiss() }
                 .font(.headline)
                 .frame(maxWidth: .infinity)
                 .padding()

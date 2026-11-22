@@ -7,12 +7,14 @@ import SwiftUI
 
 /// Rough pipeline stages with the time (seconds) they usually start at.
 /// The server doesn't report progress, so these are estimates by elapsed time.
-private let generationSteps: [(start: TimeInterval, title: String, icon: String)] = [
-    (0, "Finding today's news", "magnifyingglass"),
-    (25, "Writing the article at your level", "pencil.line"),
-    (70, "Picking your new words", "character.book.closed"),
-    (100, "Making your quiz", "checklist"),
-]
+private var generationSteps: [(start: TimeInterval, title: String, icon: String)] {
+    [
+        (0, L("Finding today's news", "今日のニュースを探しています"), "magnifyingglass"),
+        (25, L("Writing the article at your level", "あなたのレベルで記事を書いています"), "pencil.line"),
+        (70, L("Picking your new words", "新しい単語を選んでいます"), "character.book.closed"),
+        (100, L("Making your quiz", "クイズを作っています"), "checklist"),
+    ]
+}
 
 struct GeneratingView: View {
     let startedAt: Date
@@ -35,9 +37,9 @@ struct GeneratingView: View {
                 }
 
                 VStack(spacing: 8) {
-                    Text("Writing your article")
+                    Text(L("Writing your article", "記事を作成しています"))
                         .font(.title2.weight(.bold))
-                    Text("This usually takes 1–3 minutes.")
+                    Text(L("This usually takes 1–3 minutes.", "通常1〜3分かかります。"))
                         .foregroundStyle(.secondary)
                 }
 
@@ -54,7 +56,7 @@ struct GeneratingView: View {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "iphone.and.arrow.forward")
                         .foregroundStyle(Color.accentColor)
-                    Text("You can put the app in the background. Your new article will be at the top of the list when you come back.")
+                    Text(L("You can put the app in the background. Your new article will be at the top of the list when you come back.", "アプリを閉じても大丈夫です。戻ると、新しい記事が一覧の一番上にあります。"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -65,7 +67,7 @@ struct GeneratingView: View {
                 Button {
                     onMinimize()
                 } label: {
-                    Text("Read other articles meanwhile")
+                    Text(L("Read other articles meanwhile", "その間にほかの記事を読む"))
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -118,10 +120,10 @@ struct GeneratingBanner: View {
         Button(action: onTap) {
             HStack(spacing: 10) {
                 ProgressView()
-                Text("Writing your new article…")
+                Text(L("Writing your new article…", "新しい記事を作成しています…"))
                     .font(.subheadline.weight(.medium))
                 Spacer()
-                Text("Show")
+                Text(L("Show", "表示"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.accentColor)
             }

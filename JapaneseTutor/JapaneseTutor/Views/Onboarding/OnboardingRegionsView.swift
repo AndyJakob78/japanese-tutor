@@ -18,10 +18,10 @@ struct OnboardingRegionsView: View {
                     .padding(.top, 40)
 
                 VStack(spacing: 8) {
-                    Text("Which regions matter to you?")
+                    Text(L("Which regions matter to you?", "どの地域のニュースを読みたいですか？"))
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
-                    Text("Up to 10 regions — country, state, prefecture, or city.")
+                    Text(L("Up to 10 regions — country, state, prefecture, or city.", "10か所まで — 国、州、都道府県、都市を選べます。"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -30,6 +30,7 @@ struct OnboardingRegionsView: View {
 
                 ChipGridView(
                     items: vm.predefinedRegions,
+                    label: Labels.region,
                     isSelected: { vm.selectedRegions.contains($0.lowercased()) },
                     isDisabled: { region in
                         !vm.selectedRegions.contains(region.lowercased())
@@ -47,7 +48,7 @@ struct OnboardingRegionsView: View {
                                 vm.selectedRegions.remove(region)
                             } label: {
                                 HStack(spacing: 4) {
-                                    Text(region.capitalized)
+                                    Text(Labels.region(region))
                                         .font(.subheadline.weight(.medium))
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.caption)
@@ -67,7 +68,7 @@ struct OnboardingRegionsView: View {
                 // Custom region input — hidden when limit reached
                 if vm.selectedRegions.count < 10 {
                     HStack(spacing: 10) {
-                        TextField("Add a country, city, or region…", text: $vm.customRegionInput)
+                        TextField(L("Add a country, city, or region…", "国、都市、地域を追加…"), text: $vm.customRegionInput)
                             .textInputAutocapitalization(.words)
                             .autocorrectionDisabled()
                             .submitLabel(.done)
@@ -97,7 +98,7 @@ struct OnboardingRegionsView: View {
                     .padding(.horizontal, 24)
                 }
 
-                Text("\(vm.selectedRegions.count) of 10 selected")
+                Text(L("\(vm.selectedRegions.count) of 10 selected", "\(vm.selectedRegions.count) / 10 選択中"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

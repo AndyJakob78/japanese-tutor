@@ -21,7 +21,7 @@ class MistakesViewModel {
             weakSpots = response.weakSpots
             mistakes = response.mistakes
         } catch {
-            errorMessage = "Couldn't load your mistakes. Please try again."
+            errorMessage = L("Couldn't load your mistakes. Please try again.", "読み込めませんでした。もう一度お試しください。")
         }
         isLoading = false
     }
@@ -36,22 +36,22 @@ struct MistakesView: View {
             if viewModel.isLoading && viewModel.mistakes.isEmpty {
                 ProgressView()
             } else if let error = viewModel.errorMessage, viewModel.mistakes.isEmpty {
-                ContentUnavailableView("Not loaded", systemImage: "wifi.exclamationmark", description: Text(error))
+                ContentUnavailableView(L("Not loaded", "読み込めません"), systemImage: "wifi.exclamationmark", description: Text(error))
             } else if viewModel.mistakes.isEmpty {
                 ContentUnavailableView(
-                    "No mistakes yet",
+                    L("No mistakes yet", "間違いはまだありません"),
                     systemImage: "checkmark.seal",
-                    description: Text("Corrections from Build Sentences show up here, so you can see what to work on.")
+                    description: Text(L("Corrections from Build Sentences show up here, so you can see what to work on.", "「文を作る」で直された間違いがここに記録され、苦手なところがわかります。"))
                 )
             } else {
                 list
             }
         }
-        .navigationTitle("My Mistakes")
+        .navigationTitle(L("My Mistakes", "間違いノート"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Close") { dismiss() }
+                Button(L("Close", "閉じる")) { dismiss() }
             }
         }
         .task { await viewModel.load() }
@@ -80,12 +80,12 @@ struct MistakesView: View {
                     .padding(.vertical, 2)
                 }
             } header: {
-                Text("Weak spots")
+                Text(L("Weak spots", "苦手なところ"))
             } footer: {
-                Text("Your new articles use these on purpose, and Build Sentences starts with the top one.")
+                Text(L("Your new articles use these on purpose, and Build Sentences starts with the top one.", "新しい記事ではこれらをわざと使います。「文を作る」は一番多い間違いから始まります。"))
             }
 
-            Section("Recent corrections") {
+            Section(L("Recent corrections", "最近の間違い")) {
                 ForEach(viewModel.mistakes) { m in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(alignment: .top) {

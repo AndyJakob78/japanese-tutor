@@ -28,13 +28,13 @@ struct OnboardingCompletionView: View {
                 .opacity(showCheckmark ? 1 : 0)
 
                 VStack(spacing: 10) {
-                    Text("You're all set! 🎉")
+                    Text(L("You're all set! 🎉", "準備ができました！🎉"))
                         .font(.title.weight(.bold))
                         .opacity(showText ? 1 : 0)
 
                     Text(hasArticleReady
-                         ? "Great choices! Your article is ready."
-                         : "Great choices! We're generating your first article right now based on your interests.")
+                         ? L("Great choices! Your article is ready.", "記事ができました。")
+                         : L("Great choices! We're generating your first article right now based on your interests.", "選んだテーマをもとに、最初の記事を作成しています。"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -49,7 +49,7 @@ struct OnboardingCompletionView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
-                                Text(statusMessage ?? "Your first article is ready!")
+                                Text(statusMessage ?? L("Your first article is ready!", "最初の記事ができました！"))
                                     .font(.subheadline.weight(.medium))
                             }
                             .transition(.scale.combined(with: .opacity))
@@ -58,14 +58,14 @@ struct OnboardingCompletionView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "info.circle.fill")
                                     .foregroundStyle(.secondary)
-                                Text(statusMessage ?? "You can generate articles from the main screen.")
+                                Text(statusMessage ?? L("You can generate articles from the main screen.", "記事はメイン画面から作成できます。"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         } else {
                             HStack(spacing: 10) {
                                 ProgressView()
-                                Text("Generating article…")
+                                Text(L("Generating article…", "記事を作成しています…"))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -85,7 +85,7 @@ struct OnboardingCompletionView: View {
                     Button {
                         vm.isReadyToFinish = true
                     } label: {
-                        Text(hasArticleReady ? "Start Reading" : "Enter App")
+                        Text(hasArticleReady ? L("Start Reading", "読みはじめる") : L("Enter App", "アプリを開く"))
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
@@ -97,13 +97,13 @@ struct OnboardingCompletionView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
 
                     if hasArticleReady {
-                        Text("Your learning journey starts now!")
+                        Text(L("Your learning journey starts now!", "さあ、学習をはじめましょう！"))
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
                 } else {
                     // Still generating — friendly wait message
-                    Text("Hang tight — this usually takes about a minute ☕")
+                    Text(L("Hang tight — this usually takes about a minute ☕", "少しお待ちください — 通常1分ほどかかります ☕"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -139,7 +139,7 @@ struct OnboardingCompletionView: View {
             await MainActor.run {
                 withAnimation {
                     hasArticleReady = true
-                    statusMessage = "Your first article is ready!"
+                    statusMessage = L("Your first article is ready!", "最初の記事ができました！")
                     isFinished = true
                 }
             }
@@ -159,7 +159,7 @@ struct OnboardingCompletionView: View {
                 await MainActor.run {
                     withAnimation {
                         hasArticleReady = true
-                        statusMessage = "Your articles are ready!"
+                        statusMessage = L("Your articles are ready!", "記事が用意できています！")
                         isFinished = true
                     }
                 }
@@ -172,7 +172,7 @@ struct OnboardingCompletionView: View {
         // Step 3: Neither generation nor existing articles — let them continue anyway
         await MainActor.run {
             withAnimation {
-                statusMessage = "You can generate articles from the main screen."
+                statusMessage = L("You can generate articles from the main screen.", "記事はメイン画面から作成できます。")
                 isFinished = true
             }
         }

@@ -195,10 +195,10 @@ function cleanQuiz(quiz) {
 }
 
 /** Plain checks on the quiz. Returns a list of problems (strings). */
-function checkQuiz(quiz) {
+function checkQuiz(quiz, count = 6) {
   const problems = [];
   const qs = (quiz && quiz.questions) || [];
-  if (qs.length < 6) problems.push(`only ${qs.length} questions (6 are needed)`);
+  if (qs.length < count) problems.push(`only ${qs.length} questions (${count} are needed)`);
   qs.forEach((q, i) => {
     const o = q.options || [];
     if (o.length !== 4 || new Set(o.map(x => String(x).trim().toLowerCase())).size !== 4) problems.push(`Q${i + 1}: needs four different options`);

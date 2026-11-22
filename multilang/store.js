@@ -9,6 +9,11 @@
 // a fake database and never touch the live one.
 
 const { applyTest, answerParts } = require('./learn');
+const { applyTestResult } = require('../server/services/word-schedule');
+
+// Words carry a small number per learner (num_id): the app's shared screens
+// use whole numbers as word ids, like the Japanese word list does.
+const maxNum = docs => docs.reduce((m, d) => Math.max(m, d.data().num_id || 0), 0);
 
 // review state of a word that was never tested
 const NEW_WORD = { status: 'new', times_seen: 1, times_tested: 0, times_tested_correct: 0, streak_correct: 0, next_review_at: null, last_tested_at: null };
@@ -18,7 +23,7 @@ function toStored(a, id, userId) {
   const now = new Date().toISOString();
   return {
     id, user_id: userId, language: a.language, level: a.level, explain_language: 'ja',
-    topic: a.topic || '', title: a.title, summary: a.summary, body: a.body, translation: a.translation_ja,
+    topic: a.topic || '', region: a.region || '', category: a.category || '', title: a.title, summary: a.summary, body: a.body, translation: a.translation_ja,
     vocabulary: (a.vocabulary || []).map(v => ({
       word: v.word, base: v.base || v.word, pos: v.pos || '', meaning: v.meaning_ja || '',
       example: v.example || '', example_translation: v.example_ja || '',
@@ -38,7 +43,8 @@ function toStored(a, id, userId) {
 }
 
 const listItem = d => ({
-  id: d.id, language: d.language, level: d.level, title: d.title, summary: d.summary, topic: d.topic,
+  id: d.id, language: d.language, level: d.level, title: d.title, summary: d.summary, topic: d.topic, region: d.region || '', category: d.category || '',
+  review_word_count: (d.review_vocabulary || []).length,
   word_count: d.word_count, new_word_count: d.new_word_count, created_at: d.created_at,
   read_at: d.read_at, quiz_completed_at: d.quiz_completed_at, quiz_score: d.quiz_score,
 });
@@ -67,11 +73,13 @@ function createStore(cols, nextId) {
       await cols.articles.doc(String(id)).set(stored);
 
       // word list: one entry per dictionary form and learner
-      const existing = new Map((await userDocs(cols.vocabulary, userId)).map(d => [String(d.data().base).toLowerCase(), d]));
+      const mine = await userDocs(cols.vocabulary, userId);
+      const existing = new Map(mine.map(d => [String(d.data().base).toLowerCase(), d]));
+      let num = maxNum(mine);
       for (const v of stored.vocabulary) {
         const hit = existing.get(String(v.base).toLowerCase());
         if (hit) await hit.ref.update({ times_seen: (hit.data().times_seen || 1) + 1, last_seen_at: stored.created_at, last_article_id: id });
-        else await cols.vocabulary.doc().set({ ...v, ...NEW_WORD, user_id: userId, first_article_id: id, last_article_id: id, created_at: stored.created_at, last_seen_at: stored.created_at });
+        else await cols.vocabulary.doc().set({ ...v, ...NEW_WORD, num_id: ++num, user_id: userId, first_article_id: id, last_article_id: id, created_at: stored.created_at, last_seen_at: stored.created_at });
       }
       for (const v of stored.review_vocabulary) {
         const hit = existing.get(String(v.base).toLowerCase());
@@ -114,16 +122,40 @@ function createStore(cols, nextId) {
       return { correct, total, score: quiz_score, results };
     },
 
-    async deleteArticle(id, userId) {
+    /** The words stay in the learner's word list unless deleteVocabulary is set (then: the words first met in this article). */
+    async deleteArticle(id, userId, { deleteVocabulary = false } = {}) {
       const hit = await getOwned(id, userId);
       if (!hit) return false;
-      await hit.ref.delete(); // the words stay in the learner's word list
-      return true;
+      let words = 0;
+      if (deleteVocabulary) {
+        for (const d of await userDocs(cols.vocabulary, userId)) {
+          if (String(d.data().first_article_id) === String(id)) { await d.ref.delete(); words++; }
+        }
+      }
+      await hit.ref.delete();
+      return { deleted: true, vocabulary_deleted_count: words };
     },
 
     async listVocabulary(userId) {
       return (await userDocs(cols.vocabulary, userId)).map(d => ({ ...NEW_WORD, ...d.data(), id: d.id, ...answerParts(d.data().base) }))
         .sort((a, b) => (b.last_seen_at || '').localeCompare(a.last_seen_at || ''));
+    },
+
+    /** The word list with a number on every word (words from before the numbers get theirs here, once). */
+    async listVocabularyNumbered(userId) {
+      const docs = await userDocs(cols.vocabulary, userId);
+      let num = maxNum(docs);
+      const numbers = new Map();
+      for (const d of docs) if (!d.data().num_id) numbers.set(d.id, ++num);
+      await Promise.all(docs.filter(d => numbers.has(d.id)).map(d => d.ref.update({ num_id: numbers.get(d.id) })));
+      return docs.map(d => ({ ...NEW_WORD, ...d.data(), id: d.id, num_id: d.data().num_id || numbers.get(d.id), ...answerParts(d.data().base) }))
+        .sort((a, b) => (b.last_seen_at || '').localeCompare(a.last_seen_at || ''));
+    },
+
+    /** Document id of the learner's word with this number, or null. */
+    async wordIdByNumber(num, userId) {
+      const hit = (await userDocs(cols.vocabulary, userId)).find(d => d.data().num_id === Number(num));
+      return hit ? hit.id : null;
     },
 
     async listAllArticles(userId) {
@@ -138,6 +170,7 @@ function createStore(cols, nextId) {
       const now = new Date().toISOString();
       const ref = cols.vocabulary.doc();
       const doc = {
+        num_id: maxNum(all) + 1,
         word: entry.word || entry.base, base: entry.base, pos: entry.pos || '', meaning: entry.meaning, example: entry.example || '',
         example_translation: entry.example_translation || '', ...NEW_WORD, user_id: userId,
         first_article_id: entry.article_id || null, last_article_id: entry.article_id || null, created_at: now, last_seen_at: now, added_by_learner: true,
@@ -153,13 +186,22 @@ function createStore(cols, nextId) {
       return { ref, data: { ...NEW_WORD, ...doc.data(), id: doc.id } };
     },
 
-    /** Record one review answer and move the word's schedule. */
-    async testWord(id, userId, correct) {
+    /**
+     * Record one review answer and move the word's schedule.
+     * With a `mode` ("typed" | "sentence" | "choice") the Japanese rule applies:
+     * only recall (typed, own sentence) can make a word "known". Without a mode
+     * (app 1.5, where every review is typed) the first rule stays.
+     */
+    async testWord(id, userId, correct, mode) {
       const hit = await this.getWord(id, userId);
       if (!hit) return null;
-      const change = applyTest(hit.data, correct);
+      // a first test moves a new word to "learning"
+      const change = mode ? applyTestResult({ ...hit.data, status: hit.data.status === 'new' ? 'learning' : hit.data.status }, correct, mode) : applyTest(hit.data, correct);
+      // the day a word became "known" — the progress screen's pace is counted from it
+      const becameKnown = change.status === 'known' && hit.data.status !== 'known' && hit.data.status !== 'mastered';
+      if (becameKnown) change.known_at = new Date().toISOString();
       await hit.ref.update(change);
-      return { word: { ...hit.data, ...change, ...answerParts(hit.data.base) }, statusChanged: change.status !== hit.data.status };
+      return { word: { ...hit.data, ...change, ...answerParts(hit.data.base) }, statusChanged: change.status !== hit.data.status, becameKnown };
     },
 
     async setWordStatus(id, userId, status) {

@@ -28,7 +28,7 @@ class ArticleSpeaker: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelega
 
     /// "ja" (default) reads romaji; "de" / "en" read the text as written and
     /// show the controls in Japanese (those learners are Japanese speakers).
-    var language = "ja"
+    var language = LearningLanguage.current.rawValue
     var sentences: [String] = []
     var index = 0
     var isPlaying = false

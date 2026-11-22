@@ -18,10 +18,10 @@ struct OnboardingTopicsView: View {
 
 
                 VStack(spacing: 8) {
-                    Text("What topics interest you?")
+                    Text(L("What topics interest you?", "どんなテーマに興味がありますか？"))
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
-                    Text("Choose up to 8. Articles will be generated about these subjects.")
+                    Text(L("Choose up to 8. Articles will be generated about these subjects.", "8つまで選べます。選んだテーマのニュースから記事を作ります。"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -30,6 +30,7 @@ struct OnboardingTopicsView: View {
 
                 ChipGridView(
                     items: vm.predefinedTopics,
+                    label: Labels.topic,
                     isSelected: { vm.selectedTopics.contains($0.lowercased()) },
                     isDisabled: { topic in
                         !vm.selectedTopics.contains(topic.lowercased())
@@ -47,7 +48,7 @@ struct OnboardingTopicsView: View {
                                 vm.selectedTopics.remove(topic)
                             } label: {
                                 HStack(spacing: 4) {
-                                    Text(topic.capitalized)
+                                    Text(Labels.topic(topic))
                                         .font(.subheadline.weight(.medium))
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.caption)
@@ -67,7 +68,7 @@ struct OnboardingTopicsView: View {
                 // Custom topic input — hidden when limit reached
                 if vm.selectedTopics.count < 8 {
                     HStack(spacing: 10) {
-                        TextField("Add your own topic…", text: $vm.customTopicInput)
+                        TextField(L("Add your own topic…", "自分のテーマを追加…"), text: $vm.customTopicInput)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .submitLabel(.done)
@@ -97,7 +98,7 @@ struct OnboardingTopicsView: View {
                     .padding(.horizontal, 24)
                 }
 
-                Text("\(vm.selectedTopics.count) of 8 selected")
+                Text(L("\(vm.selectedTopics.count) of 8 selected", "\(vm.selectedTopics.count) / 8 選択中"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

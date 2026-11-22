@@ -10,6 +10,7 @@
 const express = require('express');
 const router = express.Router();
 const { callClaudeJSON } = require('../services/claude');
+const { bump } = require('../services/progress-store');
 const { _internals: { loadConfig, findExistingVocab } } = require('../../agent/pipeline');
 const { lookupLevel } = require('../../agent/middleware/jlpt-levels');
 const { TYPES, PATTERNS, saveMistakes, loadMistakes, summarizeWeakSpots } = require('../services/mistakes');
@@ -74,6 +75,7 @@ router.post('/sentence', async (req, res, next) => {
     // Only the first try of a round counts (a retry after seeing the answer
     // would double-count the same slip). Older app versions don't send first_try.
     if (firstTry !== false) await saveMistakes(req.userId, { fixes, sentence: sentence.trim(), corrected });
+    if (firstTry !== false) await bump(req, 'ja', { sentences: 1 }); // the progress screen's daily record
     res.json({
       verdict: ['correct', 'almost', 'wrong'].includes(result.verdict) ? result.verdict : 'almost',
       corrected,

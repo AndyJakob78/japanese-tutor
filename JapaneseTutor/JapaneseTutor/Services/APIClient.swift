@@ -53,11 +53,15 @@ class APIClient {
         request.httpMethod = method
         request.setValue(userId, forHTTPHeaderField: "X-User-ID")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Minutes east of UTC, so the server counts "today" as the learner's own day (streak, weekly goals)
+        request.setValue(String(TimeZone.current.secondsFromGMT() / 60), forHTTPHeaderField: "X-Timezone-Offset")
         // German / English: the server serves that language's own data.
         // Japanese sends no header, exactly as before.
         let language = LearningLanguage.current
         if language != .japanese {
             request.setValue(language.rawValue, forHTTPHeaderField: "X-Learning-Language")
+            // 2 = answer in the same shape as the Japanese API (this app uses one set of screens)
+            request.setValue("2", forHTTPHeaderField: "X-Client-Api")
         }
         return request
     }
@@ -156,7 +160,8 @@ class APIClient {
             meaningEn: entry.meaningEn,
             partOfSpeech: entry.partOfSpeech,
             articleId: articleId,
-            contextSentence: contextSentence
+            contextSentence: contextSentence,
+            example: entry.example
         )
         return try await post("/vocabulary", body: body)
     }
@@ -230,6 +235,11 @@ class APIClient {
         return try await get("/stats")
     }
 
+    /// Everything the progress screen shows: level, time to the next one, next step, streak, goals, badges
+    func fetchProgress() async throws -> LearningProgress {
+        return try await get("/progress")
+    }
+
     // MARK: - Device / Paywall
 
     /// Fetches trial status from the backend (generation_count, is_pro, trials_remaining).
@@ -286,87 +296,6 @@ class APIClient {
     }
 }
 
-// MARK: - German / English (see multilang/server.js on the server)
-
-extension APIClient {
-    func fetchLangArticles() async throws -> LangArticleListResponse {
-        return try await get("/articles?limit=50")
-    }
-
-    func fetchLangArticle(id: Int) async throws -> LangArticle {
-        return try await get("/articles/\(id)")
-    }
-
-    /// Throws `APIError.trialExhausted` like the Japanese call (the trial is shared).
-    func generateLangArticle(level: String, topic: String? = nil) async throws -> LangArticle {
-        var body: [String: Any] = ["level": level]
-        if let t = topic, !t.isEmpty { body["custom_topic"] = t }
-        var request = makeRequest("/articles/generate", method: "POST")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        request.timeoutInterval = 600
-        let (data, response) = try await URLSession.shared.data(for: request)
-        if let http = response as? HTTPURLResponse, http.statusCode == 403,
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           (json["error"] as? String) == "TRIAL_EXHAUSTED" {
-            throw APIError.trialExhausted
-        }
-        try validateResponse(response)
-        return try decoder.decode(LangArticle.self, from: data)
-    }
-
-    func markLangArticleRead(id: Int) async throws {
-        let _: LangArticle = try await patch("/articles/\(id)", body: ["read_at": true])
-    }
-
-    func deleteLangArticle(id: Int) async throws {
-        let _: LangDeleteResponse = try await delete("/articles/\(id)")
-    }
-
-    func submitLangQuiz(articleId: Int, answers: [Int]) async throws -> LangQuizResult {
-        return try await post("/articles/\(articleId)/quiz", body: ["answers": answers])
-    }
-
-    func fetchLangVocabulary(status: String? = nil) async throws -> LangVocabularyResponse {
-        return try await get("/vocabulary" + (status.map { "?status=\($0)" } ?? ""))
-    }
-
-    func fetchLangReviewWords(limit: Int = 10) async throws -> LangReviewResponse {
-        return try await get("/vocabulary/review?limit=\(limit)")
-    }
-
-    func recordLangTest(wordId: String, correct: Bool) async throws {
-        let _: LangTestResponse = try await post("/vocabulary/\(wordId)/test", body: ["correct": correct])
-    }
-
-    func setLangWordStatus(wordId: String, status: String) async throws {
-        let _: LangWord = try await patch("/vocabulary/\(wordId)", body: ["status": status])
-    }
-
-    func deleteLangWord(wordId: String) async throws {
-        let _: LangDeleteResponse = try await delete("/vocabulary/\(wordId)")
-    }
-
-    func addLangWord(_ entry: LangLookup, articleId: Int?) async throws -> LangWord {
-        return try await post("/vocabulary", body: LangAddWordRequest(word: entry.word, base: entry.base, pos: entry.pos, meaning: entry.meaning, example: entry.example, exampleTranslation: entry.exampleTranslation, articleId: articleId))
-    }
-
-    func lookupLangWord(_ word: String, sentence: String) async throws -> LangLookup {
-        return try await post("/practice/lookup", body: ["word": word, "sentence": sentence])
-    }
-
-    func checkLangSentence(_ request: LangSentenceRequest) async throws -> LangSentenceCheck {
-        return try await post("/practice/sentence", body: request)
-    }
-
-    func fetchLangMistakes() async throws -> LangMistakesResponse {
-        return try await get("/practice/mistakes")
-    }
-
-    func fetchLangStats() async throws -> LangStats {
-        return try await get("/stats")
-    }
-}
-
 // MARK: - Supporting types
 
 /// Returned by GET /api/device/status and POST /api/device/upgrade
@@ -416,9 +345,11 @@ struct WordLookup: Codable {
     let jlptLevel: String?
     /// Set when the learner already has this word
     let vocabularyId: Int?
+    /// German / English: an example sentence and its translation, one per line
+    let example: String?
 
     enum CodingKeys: String, CodingKey {
-        case note
+        case note, example
         case wordRomajiMacron = "word_romaji_macron"
         case wordKanji = "word_kanji"
         case wordKana = "word_kana"
@@ -438,8 +369,10 @@ struct AddVocabularyRequest: Encodable {
     let partOfSpeech: String?
     let articleId: Int?
     let contextSentence: String?
+    let example: String?
 
     enum CodingKeys: String, CodingKey {
+        case example
         case wordRomajiMacron = "word_romaji_macron"
         case wordKanji = "word_kanji"
         case wordKana = "word_kana"
@@ -561,10 +494,10 @@ enum APIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidResponse:  return "Invalid server response"
-        case .httpError(let c): return "Server error (HTTP \(c))"
-        case .requestFailed:    return "Request failed"
-        case .trialExhausted:   return "Free trial limit reached"
+        case .invalidResponse:  return L("Invalid server response", "サーバーの応答が正しくありません")
+        case .httpError(let c): return L("Server error (HTTP \(c))", "サーバーエラー (HTTP \(c))")
+        case .requestFailed:    return L("Request failed", "通信に失敗しました")
+        case .trialExhausted:   return L("Free trial limit reached", "無料の記事を使い切りました")
         }
     }
 }

@@ -17,13 +17,14 @@ class StatsViewModel {
     }
 }
 
-struct StatsView: View {
+/// The detailed numbers (word status, levels, articles). Opened from the progress screen.
+struct StatsDetailsView: View {
     @State private var viewModel = StatsViewModel()
 
     var body: some View {
         ScrollView {
             if viewModel.isLoading {
-                ProgressView("Loading stats...")
+                ProgressView(L("Loading stats...", "統計を読み込んでいます…"))
                     .padding(.top, 100)
             } else if let stats = viewModel.stats {
                 VStack(spacing: 20) {
@@ -57,7 +58,8 @@ struct StatsView: View {
                 .padding()
             }
         }
-        .navigationTitle("Progress")
+        .navigationTitle(L("All numbers", "くわしい数字"))
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.loadStats()
         }
@@ -72,10 +74,10 @@ struct StatsView: View {
     private func streakCard(_ streak: Int) -> some View {
         HStack {
             VStack(alignment: .leading) {
-                Text("Current Streak")
+                Text(L("Current Streak", "連続学習"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text("\(streak) day\(streak == 1 ? "" : "s")")
+                Text(L("\(streak) day\(streak == 1 ? "" : "s")", "\(streak)日"))
                     .font(.title.weight(.bold))
             }
             Spacer()
@@ -91,16 +93,16 @@ struct StatsView: View {
     @ViewBuilder
     private func vocabularyOverview(_ vocab: VocabularyStats) -> some View {
         HStack(spacing: 16) {
-            statBox(label: "Total Words", value: "\(vocab.total)", color: .accentColor)
-            statBox(label: "Due for Review", value: "\(vocab.dueForReview)", color: .orange)
+            statBox(label: L("Total Words", "単語の合計"), value: "\(vocab.total)", color: .accentColor)
+            statBox(label: L("Due for Review", "復習する単語"), value: "\(vocab.dueForReview)", color: .orange)
         }
         // Recall (typed answers, own sentences) and recognition (multiple choice) are different skills
         if let recall = vocab.recall, let choice = vocab.choice {
             HStack(spacing: 16) {
-                statBox(label: "Typed recall", value: recall.percent.map { "\($0)%" } ?? "–", color: .green)
-                statBox(label: "Multiple choice", value: choice.percent.map { "\($0)%" } ?? "–", color: .blue)
+                statBox(label: L("Typed recall", "入力で正解"), value: recall.percent.map { "\($0)%" } ?? "–", color: .green)
+                statBox(label: L("Multiple choice", "選択式で正解"), value: choice.percent.map { "\($0)%" } ?? "–", color: .blue)
             }
-            Text("Only typed answers and your own sentences move a word to Known.")
+            Text(L("Only typed answers and your own sentences move a word to Known.", "入力した答えと自分で書いた文だけが、単語を「覚えた」に進めます。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -109,14 +111,14 @@ struct StatsView: View {
     @ViewBuilder
     private func statusBreakdown(_ counts: StatusCounts) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Vocabulary Status")
+            Text(L("Vocabulary Status", "単語の状態"))
                 .font(.headline)
 
             HStack(spacing: 12) {
-                statusBar(label: "New", count: counts.new_, color: .gray)
-                statusBar(label: "Learning", count: counts.learning, color: .orange)
-                statusBar(label: "Known", count: counts.known, color: .blue)
-                statusBar(label: "Mastered", count: counts.mastered, color: .green)
+                statusBar(label: Labels.status("new"), count: counts.new_, color: .gray)
+                statusBar(label: Labels.status("learning"), count: counts.learning, color: .orange)
+                statusBar(label: Labels.status("known"), count: counts.known, color: .blue)
+                statusBar(label: Labels.status("mastered"), count: counts.mastered, color: .green)
             }
         }
         .padding()
@@ -127,14 +129,14 @@ struct StatsView: View {
     @ViewBuilder
     private func levelBreakdown(_ levels: [LevelCount]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("JLPT Distribution")
+            Text(L("JLPT Distribution", "単語のレベル"))
                 .font(.headline)
 
             ForEach(levels, id: \.jlptLevel) { level in
                 HStack {
                     Text(level.jlptLevel)
                         .font(.subheadline.weight(.medium))
-                        .frame(width: 30)
+                        .frame(width: LearningLanguage.current.isJapanese ? 30 : 56, alignment: .leading)
 
                     GeometryReader { geo in
                         let total = levels.reduce(0) { $0 + $1.count }
@@ -160,13 +162,13 @@ struct StatsView: View {
     @ViewBuilder
     private func articleStats(_ articles: ArticleStats) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Articles")
+            Text(L("Articles", "記事"))
                 .font(.headline)
 
             HStack(spacing: 16) {
-                statBox(label: "Generated", value: "\(articles.total)", color: .accentColor)
-                statBox(label: "Read", value: "\(articles.read)", color: .green)
-                statBox(label: "Quizzed", value: "\(articles.quizzed)", color: .purple)
+                statBox(label: L("Generated", "作成"), value: "\(articles.total)", color: .accentColor)
+                statBox(label: L("Read", "読んだ"), value: "\(articles.read)", color: .green)
+                statBox(label: L("Quizzed", "クイズ済み"), value: "\(articles.quizzed)", color: .purple)
             }
         }
     }
@@ -175,7 +177,7 @@ struct StatsView: View {
     private func quizAverage(_ average: Int) -> some View {
         HStack {
             VStack(alignment: .leading) {
-                Text("Average Quiz Score")
+                Text(L("Average Quiz Score", "クイズの平均点"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Text("\(average)%")
@@ -199,9 +201,9 @@ struct StatsView: View {
                 .font(.title2)
                 .foregroundStyle(.orange)
             VStack(alignment: .leading) {
-                Text("\(count) words due for review")
+                Text(L("\(count) words due for review", "\(count)語が復習の時期です"))
                     .font(.subheadline.weight(.medium))
-                Text("Review them to keep your vocabulary fresh")
+                Text(L("Review them to keep your vocabulary fresh", "復習して単語を忘れないようにしましょう"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -250,6 +252,10 @@ struct StatsView: View {
         case "N3": return .orange
         case "N2": return .red
         case "N1": return .purple
+        case "A1-A2": return .green
+        case "B1": return .blue
+        case "B2": return .orange
+        case "C1+": return .red
         default: return .gray
         }
     }
@@ -257,6 +263,6 @@ struct StatsView: View {
 
 #Preview {
     NavigationStack {
-        StatsView()
+        StatsDetailsView()
     }
 }

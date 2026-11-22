@@ -68,6 +68,21 @@ Japanese,JLPT,learn Japanese,romaji,kanji,hiragana,news,vocabulary,N3,N4,N5
 
 ---
 
+## What's New in 1.6
+
+```
+A new Progress screen:
+
+• See how far you are through your level, and how long it takes to reach the next one at your pace.
+• One clear next step every day, with what it gains you.
+• Streak, weekly goals and badges to keep you going.
+• Your most frequent mistake, with a way to practise it.
+
+Also: quiz answers now stay in place after you tap one, and small fixes on the article list, word list and settings.
+```
+
+App Review notes for 1.6: same as 1.5 (no account needed; three free articles, then subscription).
+
 ## What's New in 1.5
 
 ```

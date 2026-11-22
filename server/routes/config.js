@@ -14,6 +14,10 @@ const LANGUAGE_KEYS = {
   level_en: ['A1-A2', 'B1', 'B2'],
 };
 
+// German / English keep their whole settings in one record each (multilang/service.js).
+// They are not part of the Japanese settings and are not sent with them.
+const OTHER_LANGUAGE = /^settings_(?:de|en)$/;
+
 // GET /api/config — get all config (per-user)
 router.get('/', async (req, res, next) => {
   try {
@@ -23,6 +27,7 @@ router.get('/', async (req, res, next) => {
     const config = {};
     for (const doc of snapshot.docs) {
       const data = doc.data();
+      if (OTHER_LANGUAGE.test(data.key)) continue;
       try {
         config[data.key] = JSON.parse(data.value);
       } catch {
@@ -86,6 +91,7 @@ router.put('/', async (req, res, next) => {
     const config = {};
     for (const doc of updatedSnapshot.docs) {
       const data = doc.data();
+      if (OTHER_LANGUAGE.test(data.key)) continue;
       try {
         config[data.key] = JSON.parse(data.value);
       } catch {

@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// English for the Japanese course, Japanese for the German / English courses
-/// (those learners are Japanese speakers).
-func L(_ english: String, _ japanese: String) -> String {
-    LearningLanguage.current == .japanese ? english : japanese
-}
 import RevenueCat
 
 struct PaywallView: View {

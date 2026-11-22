@@ -5,6 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const { firestore, collections } = require('../services/firestore');
+const { bump } = require('../services/progress-store');
 const { spellOutNumbers, spellOutQuestion } = require('../../agent/middleware/spell-numbers');
 
 // Romaji articles are shown with numbers written out (see spell-numbers.js)
@@ -165,6 +166,7 @@ router.post('/:id/quiz', async (req, res, next) => {
     });
 
     await batch.commit();
+    await bump(req, 'ja', { quizzes: 1 }); // the progress screen's daily record
 
     res.json({
       results,
