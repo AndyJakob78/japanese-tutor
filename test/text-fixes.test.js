@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { convertScript } = require('../agent/middleware/script-converter');
-const { _internals: { normalizeNumbers } } = require('../agent/middleware/normalize');
+const { _internals: { normalizeNumbers, spaceAroundQuotes } } = require('../agent/middleware/normalize');
 const { lookupLevel } = require('../agent/middleware/jlpt-levels');
 const { applyProperNouns } = require('../agent/middleware/proper-nouns');
 const { spellOutNumbers, _internals: { fixStoredSpelling } } = require('../agent/middleware/spell-numbers');
@@ -180,4 +180,12 @@ test('reviewer deletions drop their vocab, review list skips too-hard words (#21
     { word_romaji_macron: 'terebi', word_kanji: '', meaning_en: 'TV', status: 'learning', jlpt_level: 'N5' },
   ];
   assert.deepEqual(selectReviewWords(vocab, 'N4').map(s => s.split(' ')[0]), ['junbi', 'terebi']);
+});
+
+
+test('a quoted name gets spaces from the words around it (article 225)', () => {
+  assert.equal(spaceAroundQuotes('Nihon no sūpākonpyūtā‘Fugaku’ga tomarimashita'), 'Nihon no sūpākonpyūtā ‘Fugaku’ ga tomarimashita');
+  assert.equal(spaceAroundQuotes('kare wa “Arigatō”to iimashita'), 'kare wa “Arigatō” to iimashita');
+  assert.equal(spaceAroundQuotes('kūkō no ‘Narita’ wa'), 'kūkō no ‘Narita’ wa');   // already spaced: unchanged
+  assert.equal(spaceAroundQuotes('O’Hare kūkō'), 'O’Hare kūkō');                   // a lone apostrophe: unchanged
 });

@@ -481,6 +481,7 @@ async function searchNewsWithTopic(config, userId, prefetchedArticles, excludeCa
 
   const systemPrompt = `You are a news research agent for a Japanese language learning app.
 Your job: find ONE specific, interesting current news story. NOT finance/economy unless explicitly requested.
+Avoid crime details, war, attacks and protests (a learner reads this calmly, often daily). Avoid party politics unless the topic is politics; then report it neutrally (what was decided or said, by whom), without taking sides.
 
 ## Source Expertise
 ${newsSourcingSkill}

@@ -633,6 +633,18 @@ function fixDigitWithReading(text) {
  * @param {string} [writingSystem] - 'romaji' | 'kana' | 'kanji'.
  * @returns {string}
  */
+/**
+ * A quoted name glued to the words around it: "sūpākonpyūtā‘Fugaku’ga" (article 225,
+ * 2026-11-23) → "sūpākonpyūtā ‘Fugaku’ ga". Only matched pairs of curly quotes, so a
+ * single apostrophe (O’Hare) is left alone.
+ */
+function spaceAroundQuotes(text) {
+  const L = '[A-Za-zĀĪŪĒŌāīūēō0-9]';
+  return text
+    .replace(new RegExp(`(${L})([‘“])([^‘’“”\n]{1,60})([’”])`, 'g'), '$1 $2$3$4')
+    .replace(new RegExp(`([‘“])([^‘’“”\n]{1,60})([’”])(${L})`, 'g'), '$1$2$3 $4');
+}
+
 function normalizeBody(text, writingSystem = 'romaji') {
   if (!text) return text;
   let out = text;
@@ -656,6 +668,7 @@ function normalizeBody(text, writingSystem = 'romaji') {
     out = fixMissingShDigraph(out);
     out = splitTeFormAux(out);
     out = fixGluedConditionalTo(out);
+    out = spaceAroundQuotes(out);
   }
 
   if (writingSystem === 'romaji') out = fixDigitWithReading(out);
@@ -674,6 +687,7 @@ module.exports = {
   normalizeWord,
   // exported for unit testing
   _internals: {
+    spaceAroundQuotes,
     attachTeFormToPassiveStem,
     attachMasuToPassiveStem,
     attachPoliteSuffixes,
