@@ -19,6 +19,21 @@ enum LearningLanguage: String, CaseIterable, Identifiable {
 
     var isJapanese: Bool { self == .japanese }
 
+    /// The course a brand-new install starts in (1.7). A phone set to Japanese belongs to a
+    /// Japanese speaker, who comes for English (or German), so it starts in the English
+    /// course; every other phone starts in the Japanese course. Runs only before the first
+    /// setup is finished and only when no course was stored yet, so existing users and
+    /// anyone who already switched in Settings keep their course.
+    static func chooseForNewInstall(preferred: [String] = Locale.preferredLanguages, defaults: UserDefaults = .standard) {
+        guard !defaults.bool(forKey: "hasCompletedOnboarding"), defaults.string(forKey: storageKey) == nil else { return }
+        defaults.set(course(forPhoneLanguages: preferred).rawValue, forKey: storageKey)
+    }
+
+    /// "ja-JP" first → English course; anything else → Japanese course.
+    static func course(forPhoneLanguages preferred: [String]) -> LearningLanguage {
+        (preferred.first ?? "").lowercased().hasPrefix("ja") ? .english : .japanese
+    }
+
     /// Name shown in the picker (each in the language of its learners).
     var pickerName: String {
         switch self {
@@ -85,6 +100,8 @@ enum Labels {
         "science": "科学", "culture": "文化", "environment": "環境", "health": "健康", "startups": "スタートアップ",
         "society and daily life": "社会・くらし", "nature and environment": "自然・環境", "travel": "旅行",
         "food": "食べ物", "business": "ビジネス", "music": "音楽", "art": "アート",
+        "local news": "地元のニュース", "family": "家族・子ども", "holidays": "祭り・行事",
+        "weather": "天気", "beauty": "美容",
     ]
 
     private static let regions: [String: String] = [
@@ -96,12 +113,15 @@ enum Labels {
 
     /// Topics and regions are stored as the learner typed them (or as the English key
     /// of a chip); known keys get a Japanese name on the German / English screens.
+    /// "cooking and home recipes" → "Cooking and home recipes"
+    private static func firstUpper(_ s: String) -> String { s.prefix(1).uppercased() + s.dropFirst() }
+
     static func topic(_ key: String) -> String {
-        LearningLanguage.current.isJapanese ? key.capitalized : (topics[key.lowercased()] ?? key)
+        LearningLanguage.current.isJapanese ? key.capitalized : (topics[key.lowercased()] ?? firstUpper(key))
     }
 
     static func region(_ key: String) -> String {
-        LearningLanguage.current.isJapanese ? key.capitalized : (regions[key.lowercased()] ?? key)
+        LearningLanguage.current.isJapanese ? key.capitalized : (regions[key.lowercased()] ?? key.capitalized)
     }
 }
 

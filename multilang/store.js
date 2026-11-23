@@ -18,6 +18,12 @@ const maxNum = docs => docs.reduce((m, d) => Math.max(m, d.data().num_id || 0), 
 // review state of a word that was never tested
 const NEW_WORD = { status: 'new', times_seen: 1, times_tested: 0, times_tested_correct: 0, streak_correct: 0, next_review_at: null, last_tested_at: null };
 
+/** Quiz questions as stored. */
+const storedQuiz = quiz => (quiz || []).map(q => ({
+  type: q.type, instruction: q.instruction_ja, question: q.question, options: q.options,
+  answer_index: q.answer_index, explanation: q.explanation_ja,
+}));
+
 /** Pipeline output → the document we store (neutral field names). */
 function toStored(a, id, userId) {
   const now = new Date().toISOString();
@@ -29,10 +35,9 @@ function toStored(a, id, userId) {
       example: v.example || '', example_translation: v.example_ja || '',
     })),
     grammar_note: a.grammar_note ? { point: a.grammar_note.point, explanation: a.grammar_note.explanation_ja, sentence: a.grammar_note.sentence } : null,
-    quiz: (a.quiz || []).map(q => ({
-      type: q.type, instruction: q.instruction_ja, question: q.question, options: q.options,
-      answer_index: q.answer_index, explanation: q.explanation_ja,
-    })),
+    quiz: storedQuiz(a.quiz),
+    // app 1.7: the quiz is written after the article is sent (generate.js makeQuiz)
+    ...(a._makeQuiz ? { quiz_pending: true, quiz_started_at: now } : {}),
     // words from earlier articles that come back in this one ([REVIEW] in the body)
     review_vocabulary: (a.review_vocabulary || []).map(v => ({ word: v.word, base: v.base, pos: v.pos || '', meaning: v.meaning || '', example: v.example || '', example_translation: v.example_translation || '' })),
     sources: a.sources || [],
@@ -92,6 +97,13 @@ function createStore(cols, nextId) {
       const all = (await userDocs(cols.articles, userId)).map(d => d.data())
         .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
       return { articles: all.slice((page - 1) * limit, page * limit).map(listItem), pagination: { page, limit, total: all.length, pages: Math.ceil(all.length / limit) } };
+    },
+
+    /** The quiz made in the background arrives (or failed: empty, not pending any more). */
+    async setQuiz(id, userId, questions, failed = false) {
+      const hit = await getOwned(id, userId);
+      if (!hit) return;
+      await hit.ref.update({ quiz: storedQuiz(questions), quiz_pending: false, quiz_failed: !!failed });
     },
 
     async getArticle(id, userId) {

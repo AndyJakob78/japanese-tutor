@@ -146,9 +146,15 @@ struct VocabularyListView: View {
                     showTypedReview = true
                 } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: lastTypedReviewDate == TypedReviewView.today ? "checkmark.circle.fill" : "keyboard")
-                            .font(.title2)
-                            .foregroundStyle(lastTypedReviewDate == TypedReviewView.today ? .green : .accentColor)
+                        // sensei sheep checks your words; a green tick once today's review is done
+                        Image("SheepSensei").resizable().scaledToFit()
+                            .frame(width: 44, height: 50)
+                            .overlay(alignment: .bottomTrailing) {
+                                if lastTypedReviewDate == TypedReviewView.today {
+                                    Image(systemName: "checkmark.circle.fill").font(.caption).foregroundStyle(.green)
+                                        .background(Color.cardBackground, in: Circle())
+                                }
+                            }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L("Daily Review", "毎日の復習"))
                                 .font(.headline)
@@ -166,15 +172,15 @@ struct VocabularyListView: View {
                     .padding(.vertical, 4)
                 }
                 .buttonStyle(.plain)
+                .listRowBackground(Color.cardBackground)
 
                 // Mistake memory — corrections from Build Sentences
                 Button {
                     showMistakes = true
                 } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: "scope")
-                            .font(.title2)
-                            .foregroundStyle(.orange)
+                        Image("SheepCrossX").resizable().scaledToFit()   // eye-rolling sheep, hooves crossed as an X
+                            .frame(width: 44, height: 50)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L("My Mistakes", "間違いノート"))
                                 .font(.headline)
@@ -190,6 +196,7 @@ struct VocabularyListView: View {
                     .padding(.vertical, 4)
                 }
                 .buttonStyle(.plain)
+                .listRowBackground(Color.cardBackground)
 
                 ForEach(viewModel.words) { word in
                     Button {
@@ -230,6 +237,7 @@ struct VocabularyListView: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .listRowBackground(Color.clear)
                     .swipeActions(edge: .trailing) {
                         if word.status != "known" {
                             Button(L("Known", "覚えた")) {
@@ -269,6 +277,7 @@ struct VocabularyListView: View {
         }
         // Show the server-side total so the number is correct even before all pages load
         .navigationTitle(L("Vocabulary", "単語") + " (\(viewModel.totalCount > 0 ? viewModel.totalCount : viewModel.words.count))")
+        .kotonomeScreen()
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -519,6 +528,7 @@ struct VocabularyQuizView: View {
             }
         }
         .navigationTitle(L("Vocabulary Quiz", "単語クイズ"))
+        .kotonomeScreen()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -608,9 +618,10 @@ struct VocabularyQuizView: View {
 
             if viewModel.showFeedback {
                 HStack {
+                    CornerSheep(pose: viewModel.isCorrect ? .cheer : .comfort, width: 56)
                     Image(systemName: viewModel.isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .foregroundStyle(viewModel.isCorrect ? .green : .red)
-                    Text(viewModel.isCorrect ? L("Correct!", "正解です") : L("Incorrect", "不正解です"))
+                    Text(viewModel.isCorrect ? L("Correct!", "正解です") : L("Incorrect — it's okay!", "不正解。だいじょうぶ！"))
                         .font(.headline)
                         .foregroundStyle(viewModel.isCorrect ? .green : .red)
                 }
@@ -635,6 +646,17 @@ struct VocabularyQuizView: View {
             Spacer()
         }
         .padding(.vertical)
+        .safeAreaInset(edge: .bottom) {
+            // its own strip below the answers, so it never covers one
+            HStack {
+                Spacer()
+                if !viewModel.showFeedback {
+                    CornerSheep(pose: .cross, width: 60, bubble: L("Good luck!", "がんばって！"))
+                }
+            }
+            .frame(height: 90)
+            .padding(.trailing, 12)
+        }
     }
 
     /// Returns the primary display text for a word based on writing system
@@ -653,10 +675,10 @@ struct VocabularyQuizView: View {
     }
 
     private func optionBackground(_ option: String, question: VocabQuizViewModel.Question) -> Color {
-        guard viewModel.showFeedback else { return Color(.systemGray6) }
+        guard viewModel.showFeedback else { return Color.cardBackground }
         if option == question.correctAnswer { return Color.green.opacity(0.2) }
         if option == viewModel.selectedOption && !viewModel.isCorrect { return Color.red.opacity(0.2) }
-        return Color(.systemGray6)
+        return Color.cardBackground
     }
 
     @ViewBuilder
@@ -664,12 +686,8 @@ struct VocabularyQuizView: View {
         VStack(spacing: 24) {
             let percentage = viewModel.questions.isEmpty ? 0 : Int(Double(viewModel.correctCount) / Double(viewModel.questions.count) * 100)
 
-            Image(systemName: percentage >= 70 ? "star.fill" : "arrow.counterclockwise")
-                .font(.system(size: 60))
-                .foregroundStyle(percentage >= 70 ? .yellow : .orange)
-
-            Text(L("Quiz Complete!", "クイズ完了！"))
-                .font(.title.weight(.bold))
+            SheepResult(perfect: !viewModel.questions.isEmpty && viewModel.correctCount == viewModel.questions.count,
+                        good: percentage >= 70)
 
             Text(L("\(viewModel.correctCount) / \(viewModel.questions.count) correct", "\(viewModel.questions.count)問中 \(viewModel.correctCount)問正解"))
                 .font(.title2)
@@ -704,7 +722,7 @@ struct VocabularyQuizView: View {
                     }
                 }
                 .padding()
-                .background(Color(.systemGray6))
+                .background(Color.cardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal)
             }

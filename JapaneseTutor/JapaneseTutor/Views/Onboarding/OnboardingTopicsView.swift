@@ -13,7 +13,7 @@ struct OnboardingTopicsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                onboardingHeroIcon(systemImage: "newspaper.fill")
+                onboardingHeroSheep("ChapterReading")
                     .padding(.top, 40)
 
 
@@ -21,7 +21,8 @@ struct OnboardingTopicsView: View {
                     Text(L("What topics interest you?", "どんなテーマに興味がありますか？"))
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
-                    Text(L("Choose up to 8. Articles will be generated about these subjects.", "8つまで選べます。選んだテーマのニュースから記事を作ります。"))
+                        .padding(.horizontal, 24)
+                    Text(L("Choose up to 8 — or add your own. Articles come from news about these.", "8つまで選べます。自分のテーマも追加できます。選んだテーマのニュースから記事を作ります。"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -50,6 +51,8 @@ struct OnboardingTopicsView: View {
                                 HStack(spacing: 4) {
                                     Text(Labels.topic(topic))
                                         .font(.subheadline.weight(.medium))
+                                        .lineLimit(1)
+                                        .fixedSize()
                                     Image(systemName: "xmark.circle.fill")
                                         .font(.caption)
                                 }
@@ -74,7 +77,7 @@ struct OnboardingTopicsView: View {
                             .submitLabel(.done)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
-                            .background(Color(.systemGray6))
+                            .background(Color.cardBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .onSubmit { vm.addCustomTopic() }
 

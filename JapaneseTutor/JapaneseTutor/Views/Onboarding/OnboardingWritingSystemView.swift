@@ -30,7 +30,7 @@ struct OnboardingWritingSystemView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                onboardingHeroIcon(systemImage: "textformat")
+                onboardingHeroSheep("SheepTextSize")
                     .padding(.top, 40)
 
                 VStack(spacing: 8) {

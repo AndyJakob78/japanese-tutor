@@ -48,6 +48,7 @@ struct MistakesView: View {
             }
         }
         .navigationTitle(L("My Mistakes", "間違いノート"))
+        .kotonomeScreen()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {

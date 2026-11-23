@@ -109,9 +109,6 @@ struct ArticleFeedView: View {
     @State private var articleToDelete: Article?
     @State private var showDeleteConfirmation = false
 
-    // StoreKit review prompt — shown once, immediately after the first successful generation
-    @Environment(\.requestReview) private var requestReview
-    @AppStorage("hasPromptedForFirstReview") private var hasPromptedForFirstReview = false
 
     var body: some View {
         // Read RevenueCat offering so SwiftUI re-renders banner when prices load
@@ -130,6 +127,7 @@ struct ArticleFeedView: View {
                         .buttonStyle(.plain)
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                     }
                 }
 
@@ -140,12 +138,14 @@ struct ArticleFeedView: View {
                     }
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
                 }
 
                 ForEach(viewModel.articles) { article in
                     NavigationLink(destination: ArticleDetailView(articleId: article.id)) {
                         ArticleCard(article: article)
                     }
+                    .listRowBackground(Color.clear)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
                             articleToDelete = article
@@ -159,6 +159,14 @@ struct ArticleFeedView: View {
             .listStyle(.plain)
             .refreshable {
                 await viewModel.loadArticles()
+            }
+            .overlay(alignment: .topTrailing) {
+                if !viewModel.articles.isEmpty {
+                    // peeks over the line under the big title, hooves on the line
+                    CornerSheep(pose: .peek, width: 64, bubble: L("What shall we read today?", "今日は何を読む？"))
+                        .padding(.trailing, 16)
+                        .offset(y: -78)
+                }
             }
 
             .overlay {
@@ -220,6 +228,7 @@ struct ArticleFeedView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.isGenerating)
         .navigationTitle(L("Articles", "記事"))
+        .kotonomeScreen()
         // The progress screen's "Read something new" lands here
         .onChange(of: TabRouter.shared.wantsNewArticle, initial: true) { _, wanted in
             guard wanted else { return }
@@ -231,18 +240,21 @@ struct ArticleFeedView: View {
             }
         }
         .task {
+            #if DEBUG
+            // simulator check of the waiting screen without generating an article: -previewGenerating YES
+            if UserDefaults.standard.bool(forKey: "previewGenerating") {
+                viewModel.generationStartedAt = Date()
+                viewModel.isGenerating = true
+            }
+            #endif
             await viewModel.loadArticles()
             await viewModel.loadDeviceStatus()
             // Pre-load RevenueCat offerings so the upsell banner shows localized prices
             try? await RevenueCatService.shared.loadOfferings()
         }
         .sheet(isPresented: $showGenerateSheet) {
-            GenerateArticleSheet(viewModel: viewModel, onSuccess: {
-                // Only prompt once and only on the success path (never on error or paywall)
-                guard !hasPromptedForFirstReview else { return }
-                hasPromptedForFirstReview = true
-                requestReview()
-            })
+            // 1.7: the rating prompt moved to the quiz result (RatingRule)
+            GenerateArticleSheet(viewModel: viewModel)
         }
         .sheet(isPresented: $viewModel.showPaywall) {
             PaywallView(trialsRemaining: viewModel.deviceStatus?.trialsRemaining, onUpgradeSuccess: {
@@ -411,7 +423,7 @@ struct ProUpsellBanner: View {
                     .foregroundStyle(.tertiary)
             }
             .padding(14)
-            .background(Color(.systemGray6))
+            .background(Color.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -429,7 +441,6 @@ struct GenerateArticleSheet: View {
     @State private var newWordsCount = 12
     @State private var targetWordCount = 200
     @State private var selectedWritingSystem = "romaji"
-    @State private var customTopic = ""
     @State private var configLoaded = false
 
     let levels = LearningLanguage.current.levels
@@ -467,21 +478,12 @@ struct GenerateArticleSheet: View {
                 }
 
                 Section {
-                    TextField(L("e.g. Tokyo Olympics, AI startups...", "例: サッカー、AI、宇宙…"), text: $customTopic)
-                        .textInputAutocapitalization(.never)
-                } header: {
-                    Text(L("Topic (Optional)", "テーマ (任意)"))
-                } footer: {
-                    Text(L("Leave empty to get a random news article from your interests.", "空欄のままにすると、設定したテーマからニュースを選びます。"))
-                }
-
-                Section {
                     Button {
                         // Close the form at once; the feed shows the generating screen.
                         // The task outlives this sheet, so the article still arrives.
                         let feed = viewModel
                         let onSuccess = onSuccess
-                        let topic = customTopic.isEmpty ? nil : customTopic
+                        let topic: String? = nil   // topics come from setup / Settings (1.7)
                         Task {
                             let succeeded = await feed.generateArticle(
                                 proficiencyLevel: selectedLevel,
@@ -502,6 +504,7 @@ struct GenerateArticleSheet: View {
                 }
             }
             .navigationTitle(L("New Article", "新しい記事"))
+            .kotonomeScreen()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

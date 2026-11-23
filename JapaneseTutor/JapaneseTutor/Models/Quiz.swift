@@ -41,11 +41,13 @@ struct QuizResponse: Codable {
     let total: Int
     let answered: Int
     let correct: Int
+    /// 1.7: "pending" while the quiz is still being made after the article, "failed" if it never came
+    let status: String?
 
     enum CodingKeys: String, CodingKey {
         case articleId = "article_id"
         case articleTitle = "article_title"
-        case questions, total, answered, correct
+        case questions, total, answered, correct, status
     }
 }
 

@@ -76,7 +76,11 @@ struct LearningProgress: Codable {
         var id: String { key }
         enum CodingKeys: String, CodingKey { case key, group, value; case earnedAt = "earned_at" }
     }
-    struct Totals: Codable { let words: Int; let due: Int }
+    struct Totals: Codable {
+        let words: Int; let due: Int
+        let typedRight: Int?; let articlesRead: Int?
+        enum CodingKeys: String, CodingKey { case words, due; case typedRight = "typed_right"; case articlesRead = "articles_read" }
+    }
 
     let level: String
     let nextLevel: String?

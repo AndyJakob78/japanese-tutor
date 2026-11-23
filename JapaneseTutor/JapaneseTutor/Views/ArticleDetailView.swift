@@ -146,6 +146,7 @@ struct ArticleDetailView: View {
             }
         }
         .navigationTitle(L("Article", "記事"))
+        .kotonomeScreen()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -160,21 +161,23 @@ struct ArticleDetailView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "speaker.wave.2")
+                        SheepToolbarIcon(name: "SheepListen")
                     }
                     .accessibilityLabel(L("Listen", "読み上げ"))
 
                     // Quiz button — always accessible
                     NavigationLink(destination: QuizView(articleId: articleId)) {
-                        Image(systemName: "brain.head.profile")
+                        SheepToolbarIcon(name: "SheepQuiz")
                     }
+                    .accessibilityLabel(L("Quiz", "クイズ"))
 
                     // Word lookup button
                     Button {
                         viewModel.showWordLookup = true
                     } label: {
-                        Image(systemName: "character.book.closed")
+                        SheepToolbarIcon(name: "SheepWords")
                     }
+                    .accessibilityLabel(L("Words in this article", "この記事の単語"))
 
                     // Text size menu
                     Menu {
@@ -188,8 +191,9 @@ struct ArticleDetailView: View {
                             Label(L("Default Size", "標準の大きさ"), systemImage: "arrow.counterclockwise")
                         }
                     } label: {
-                        Image(systemName: "textformat.size")
+                        SheepToolbarIcon(name: "SheepTextSize")
                     }
+                    .accessibilityLabel(L("Text size", "文字の大きさ"))
                 }
             }
         }
@@ -325,7 +329,7 @@ struct ArticleDetailView: View {
                     }
                 }
                 .padding()
-                .background(Color(.systemGray6))
+                .background(Color.cardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
@@ -422,6 +426,7 @@ struct WordDetailSheet: View {
                 }
             }
             .navigationTitle(word.wordRomajiMacron)
+            .kotonomeScreen()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -475,6 +480,7 @@ struct WordLookupSheet: View {
                 }
             }
             .navigationTitle(L("Word Lookup", "単語を調べる"))
+            .kotonomeScreen()
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $viewModel.lookupQuery, prompt: L("Search words or meanings...", "単語や意味で検索…"))
             .toolbar {
@@ -542,5 +548,18 @@ struct WordLookupSheet: View {
 #Preview {
     NavigationStack {
         ArticleDetailView(articleId: 1)
+    }
+}
+
+
+/// Toolbar button image: the felt sheep holding the tool (headphones, pencil, book, letter A).
+struct SheepToolbarIcon: View {
+    let name: String
+    var body: some View {
+        Image(name)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 30, height: 30)
+            .clipShape(Circle())
     }
 }

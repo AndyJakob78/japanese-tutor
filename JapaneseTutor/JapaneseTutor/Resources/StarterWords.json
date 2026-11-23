@@ -1,0 +1,1206 @@
+{
+ "ja": {
+  "N5": [
+   {
+    "w": "taberu",
+    "k": "食べる",
+    "m": "to eat"
+   },
+   {
+    "w": "nomu",
+    "k": "飲む",
+    "m": "to drink"
+   },
+   {
+    "w": "miru",
+    "k": "見る",
+    "m": "to see"
+   },
+   {
+    "w": "iku",
+    "k": "行く",
+    "m": "to go"
+   },
+   {
+    "w": "kuru",
+    "k": "来る",
+    "m": "to come"
+   },
+   {
+    "w": "kau",
+    "k": "買う",
+    "m": "to buy"
+   },
+   {
+    "w": "yomu",
+    "k": "読む",
+    "m": "to read"
+   },
+   {
+    "w": "kaku",
+    "k": "書く",
+    "m": "to write"
+   },
+   {
+    "w": "hanasu",
+    "k": "話す",
+    "m": "to speak"
+   },
+   {
+    "w": "kiku",
+    "k": "聞く",
+    "m": "to listen"
+   },
+   {
+    "w": "mizu",
+    "k": "水",
+    "m": "water"
+   },
+   {
+    "w": "yama",
+    "k": "山",
+    "m": "mountain"
+   },
+   {
+    "w": "kawa",
+    "k": "川",
+    "m": "river"
+   },
+   {
+    "w": "tenki",
+    "k": "天気",
+    "m": "weather"
+   },
+   {
+    "w": "densha",
+    "k": "電車",
+    "m": "train"
+   },
+   {
+    "w": "gakkō",
+    "k": "学校",
+    "m": "school"
+   },
+   {
+    "w": "tomodachi",
+    "k": "友達",
+    "m": "friend"
+   },
+   {
+    "w": "ōkii",
+    "k": "大きい",
+    "m": "big"
+   },
+   {
+    "w": "chiisai",
+    "k": "小さい",
+    "m": "small"
+   },
+   {
+    "w": "atarashii",
+    "k": "新しい",
+    "m": "new"
+   },
+   {
+    "w": "furui",
+    "k": "古い",
+    "m": "old"
+   },
+   {
+    "w": "takai",
+    "k": "高い",
+    "m": "expensive"
+   },
+   {
+    "w": "yasui",
+    "k": "安い",
+    "m": "cheap"
+   },
+   {
+    "w": "ashita",
+    "k": "明日",
+    "m": "tomorrow"
+   }
+  ],
+  "N4": [
+   {
+    "w": "isogu",
+    "k": "急ぐ",
+    "m": "to hurry"
+   },
+   {
+    "w": "tetsudau",
+    "k": "手伝う",
+    "m": "to help"
+   },
+   {
+    "w": "kimeru",
+    "k": "決める",
+    "m": "to decide"
+   },
+   {
+    "w": "shiraseru",
+    "k": "知らせる",
+    "m": "to inform"
+   },
+   {
+    "w": "tsuzuku",
+    "k": "続く",
+    "m": "to continue"
+   },
+   {
+    "w": "okureru",
+    "k": "遅れる",
+    "m": "to be late"
+   },
+   {
+    "w": "kowasu",
+    "k": "壊す",
+    "m": "to break"
+   },
+   {
+    "w": "naosu",
+    "k": "直す",
+    "m": "to fix"
+   },
+   {
+    "w": "kaigi",
+    "k": "会議",
+    "m": "meeting"
+   },
+   {
+    "w": "keikaku",
+    "k": "計画",
+    "m": "plan"
+   },
+   {
+    "w": "ryokō",
+    "k": "旅行",
+    "m": "trip"
+   },
+   {
+    "w": "kūkō",
+    "k": "空港",
+    "m": "airport"
+   },
+   {
+    "w": "jishin",
+    "k": "地震",
+    "m": "earthquake"
+   },
+   {
+    "w": "kikai",
+    "k": "機会",
+    "m": "opportunity"
+   },
+   {
+    "w": "shumi",
+    "k": "趣味",
+    "m": "hobby"
+   },
+   {
+    "w": "anzen",
+    "k": "安全",
+    "m": "safety"
+   },
+   {
+    "w": "yakusoku",
+    "k": "約束",
+    "m": "promise"
+   },
+   {
+    "w": "keiken",
+    "k": "経験",
+    "m": "experience"
+   },
+   {
+    "w": "mezurashii",
+    "k": "珍しい",
+    "m": "rare"
+   },
+   {
+    "w": "fukuzatsu",
+    "k": "複雑",
+    "m": "complicated"
+   },
+   {
+    "w": "kanarazu",
+    "k": "必ず",
+    "m": "without fail"
+   },
+   {
+    "w": "sekai",
+    "k": "世界",
+    "m": "world"
+   },
+   {
+    "w": "shiai",
+    "k": "試合",
+    "m": "match (game)"
+   },
+   {
+    "w": "ryōri",
+    "k": "料理",
+    "m": "cooking"
+   }
+  ],
+  "N3": [
+   {
+    "w": "eikyō",
+    "k": "影響",
+    "m": "influence"
+   },
+   {
+    "w": "kankyō",
+    "k": "環境",
+    "m": "environment"
+   },
+   {
+    "w": "keizai",
+    "k": "経済",
+    "m": "economy"
+   },
+   {
+    "w": "seiji",
+    "k": "政治",
+    "m": "politics"
+   },
+   {
+    "w": "senkyo",
+    "k": "選挙",
+    "m": "election"
+   },
+   {
+    "w": "jiko",
+    "k": "事故",
+    "m": "accident"
+   },
+   {
+    "w": "kaiketsu",
+    "k": "解決",
+    "m": "solution"
+   },
+   {
+    "w": "kyōryoku",
+    "k": "協力",
+    "m": "cooperation"
+   },
+   {
+    "w": "zōka",
+    "k": "増加",
+    "m": "increase"
+   },
+   {
+    "w": "genshō",
+    "k": "減少",
+    "m": "decrease"
+   },
+   {
+    "w": "hatten",
+    "k": "発展",
+    "m": "development"
+   },
+   {
+    "w": "kanō",
+    "k": "可能",
+    "m": "possible"
+   },
+   {
+    "w": "tokubetsu",
+    "k": "特別",
+    "m": "special"
+   },
+   {
+    "w": "jūyō",
+    "k": "重要",
+    "m": "important"
+   },
+   {
+    "w": "mokuhyō",
+    "k": "目標",
+    "m": "goal"
+   },
+   {
+    "w": "kekka",
+    "k": "結果",
+    "m": "result"
+   },
+   {
+    "w": "gen'in",
+    "k": "原因",
+    "m": "cause"
+   },
+   {
+    "w": "jōhō",
+    "k": "情報",
+    "m": "information"
+   },
+   {
+    "w": "shimin",
+    "k": "市民",
+    "m": "citizen"
+   },
+   {
+    "w": "chiiki",
+    "k": "地域",
+    "m": "region"
+   },
+   {
+    "w": "kenkyū",
+    "k": "研究",
+    "m": "research"
+   },
+   {
+    "w": "happyō",
+    "k": "発表",
+    "m": "announcement"
+   },
+   {
+    "w": "kōkai",
+    "k": "公開",
+    "m": "opening to the public"
+   },
+   {
+    "w": "un'ei",
+    "k": "運営",
+    "m": "operation (running)"
+   }
+  ],
+  "N2": [
+   {
+    "w": "kaizen",
+    "k": "改善",
+    "m": "improvement"
+   },
+   {
+    "w": "kisei",
+    "k": "規制",
+    "m": "regulation"
+   },
+   {
+    "w": "teian",
+    "k": "提案",
+    "m": "proposal"
+   },
+   {
+    "w": "tōshi",
+    "k": "投資",
+    "m": "investment"
+   },
+   {
+    "w": "yosan",
+    "k": "予算",
+    "m": "budget"
+   },
+   {
+    "w": "kanri",
+    "k": "管理",
+    "m": "management"
+   },
+   {
+    "w": "kyōsō",
+    "k": "競争",
+    "m": "competition"
+   },
+   {
+    "w": "shien",
+    "k": "支援",
+    "m": "support"
+   },
+   {
+    "w": "taisaku",
+    "k": "対策",
+    "m": "countermeasure"
+   },
+   {
+    "w": "kōka",
+    "k": "効果",
+    "m": "effect"
+   },
+   {
+    "w": "jitsugen",
+    "k": "実現",
+    "m": "realization"
+   },
+   {
+    "w": "sakugen",
+    "k": "削減",
+    "m": "reduction"
+   },
+   {
+    "w": "kakudai",
+    "k": "拡大",
+    "m": "expansion"
+   },
+   {
+    "w": "kōshō",
+    "k": "交渉",
+    "m": "negotiation"
+   },
+   {
+    "w": "jinkō",
+    "k": "人口",
+    "m": "population"
+   },
+   {
+    "w": "shōhi",
+    "k": "消費",
+    "m": "consumption"
+   },
+   {
+    "w": "yushutsu",
+    "k": "輸出",
+    "m": "export"
+   },
+   {
+    "w": "yunyū",
+    "k": "輸入",
+    "m": "import"
+   },
+   {
+    "w": "kokusai",
+    "k": "国際",
+    "m": "international"
+   },
+   {
+    "w": "hantai",
+    "k": "反対",
+    "m": "opposition"
+   },
+   {
+    "w": "sansei",
+    "k": "賛成",
+    "m": "approval (agreeing)"
+   },
+   {
+    "w": "keikō",
+    "k": "傾向",
+    "m": "tendency"
+   },
+   {
+    "w": "kakaku",
+    "k": "価格",
+    "m": "price"
+   },
+   {
+    "w": "kyōkyū",
+    "k": "供給",
+    "m": "supply"
+   }
+  ],
+  "N1": [
+   {
+    "w": "kenen",
+    "k": "懸念",
+    "m": "concern"
+   },
+   {
+    "w": "tekkai",
+    "k": "撤回",
+    "m": "withdrawal"
+   },
+   {
+    "w": "jishuku",
+    "k": "自粛",
+    "m": "self-restraint"
+   },
+   {
+    "w": "zesei",
+    "k": "是正",
+    "m": "correction"
+   },
+   {
+    "w": "tōmeisei",
+    "k": "透明性",
+    "m": "transparency"
+   },
+   {
+    "w": "kanwa",
+    "k": "緩和",
+    "m": "easing"
+   },
+   {
+    "w": "sokushin",
+    "k": "促進",
+    "m": "promotion (speeding up)"
+   },
+   {
+    "w": "haijo",
+    "k": "排除",
+    "m": "exclusion"
+   },
+   {
+    "w": "shinchō",
+    "k": "慎重",
+    "m": "cautious"
+   },
+   {
+    "w": "kakuho",
+    "k": "確保",
+    "m": "securing"
+   },
+   {
+    "w": "kenshō",
+    "k": "検証",
+    "m": "verification"
+   },
+   {
+    "w": "seika",
+    "k": "成果",
+    "m": "achievement"
+   },
+   {
+    "w": "dōnyū",
+    "k": "導入",
+    "m": "introduction (adoption)"
+   },
+   {
+    "w": "kōjō",
+    "k": "向上",
+    "m": "improvement (rise)"
+   },
+   {
+    "w": "kakusa",
+    "k": "格差",
+    "m": "disparity"
+   },
+   {
+    "w": "fuhai",
+    "k": "腐敗",
+    "m": "corruption"
+   },
+   {
+    "w": "yūchi",
+    "k": "誘致",
+    "m": "attracting (investment, visitors)"
+   },
+   {
+    "w": "saikō",
+    "k": "再考",
+    "m": "reconsideration"
+   },
+   {
+    "w": "konkyo",
+    "k": "根拠",
+    "m": "grounds (basis)"
+   },
+   {
+    "w": "teishō",
+    "k": "提唱",
+    "m": "advocacy"
+   },
+   {
+    "w": "kōken",
+    "k": "貢献",
+    "m": "contribution"
+   },
+   {
+    "w": "hōshin",
+    "k": "方針",
+    "m": "policy (course)"
+   },
+   {
+    "w": "kenchi",
+    "k": "見地",
+    "m": "standpoint"
+   },
+   {
+    "w": "shiten",
+    "k": "視点",
+    "m": "viewpoint"
+   }
+  ]
+ },
+ "en": {
+  "A1-A2": [
+   {
+    "w": "weather",
+    "m": "天気"
+   },
+   {
+    "w": "breakfast",
+    "m": "朝ごはん"
+   },
+   {
+    "w": "station",
+    "m": "駅"
+   },
+   {
+    "w": "ticket",
+    "m": "切符"
+   },
+   {
+    "w": "library",
+    "m": "図書館"
+   },
+   {
+    "w": "holiday",
+    "m": "休日"
+   },
+   {
+    "w": "cheap",
+    "m": "安い"
+   },
+   {
+    "w": "expensive",
+    "m": "高い"
+   },
+   {
+    "w": "busy",
+    "m": "忙しい"
+   },
+   {
+    "w": "hungry",
+    "m": "お腹がすいた"
+   },
+   {
+    "w": "borrow",
+    "m": "借りる"
+   },
+   {
+    "w": "arrive",
+    "m": "到着する"
+   },
+   {
+    "w": "choose",
+    "m": "選ぶ"
+   },
+   {
+    "w": "forget",
+    "m": "忘れる"
+   },
+   {
+    "w": "remember",
+    "m": "覚えている"
+   },
+   {
+    "w": "neighbor",
+    "m": "隣人"
+   },
+   {
+    "w": "price",
+    "m": "値段"
+   },
+   {
+    "w": "rain",
+    "m": "雨"
+   },
+   {
+    "w": "snow",
+    "m": "雪"
+   },
+   {
+    "w": "river",
+    "m": "川"
+   },
+   {
+    "w": "early",
+    "m": "早い"
+   },
+   {
+    "w": "late",
+    "m": "遅い"
+   },
+   {
+    "w": "together",
+    "m": "一緒に"
+   },
+   {
+    "w": "sometimes",
+    "m": "時々"
+   }
+  ],
+  "B1": [
+   {
+    "w": "opportunity",
+    "m": "機会"
+   },
+   {
+    "w": "experience",
+    "m": "経験"
+   },
+   {
+    "w": "decision",
+    "m": "決定"
+   },
+   {
+    "w": "improve",
+    "m": "改善する"
+   },
+   {
+    "w": "agreement",
+    "m": "合意"
+   },
+   {
+    "w": "environment",
+    "m": "環境"
+   },
+   {
+    "w": "government",
+    "m": "政府"
+   },
+   {
+    "w": "increase",
+    "m": "増える"
+   },
+   {
+    "w": "reduce",
+    "m": "減らす"
+   },
+   {
+    "w": "announce",
+    "m": "発表する"
+   },
+   {
+    "w": "damage",
+    "m": "被害"
+   },
+   {
+    "w": "nearly",
+    "m": "ほとんど"
+   },
+   {
+    "w": "approve",
+    "m": "承認する"
+   },
+   {
+    "w": "local",
+    "m": "地元の"
+   },
+   {
+    "w": "rescue",
+    "m": "救助する"
+   },
+   {
+    "w": "support",
+    "m": "支援する"
+   },
+   {
+    "w": "invite",
+    "m": "招待する"
+   },
+   {
+    "w": "crowded",
+    "m": "混雑した"
+   },
+   {
+    "w": "community",
+    "m": "地域社会"
+   },
+   {
+    "w": "research",
+    "m": "研究"
+   },
+   {
+    "w": "election",
+    "m": "選挙"
+   },
+   {
+    "w": "former",
+    "m": "元の"
+   },
+   {
+    "w": "suggest",
+    "m": "提案する"
+   },
+   {
+    "w": "prevent",
+    "m": "防ぐ"
+   }
+  ],
+  "B2": [
+   {
+    "w": "significant",
+    "m": "重要な"
+   },
+   {
+    "w": "consequence",
+    "m": "結果"
+   },
+   {
+    "w": "regulation",
+    "m": "規制"
+   },
+   {
+    "w": "investment",
+    "m": "投資"
+   },
+   {
+    "w": "shortage",
+    "m": "不足"
+   },
+   {
+    "w": "reluctant",
+    "m": "気が進まない"
+   },
+   {
+    "w": "temporary",
+    "m": "一時的な"
+   },
+   {
+    "w": "sustainable",
+    "m": "持続可能な"
+   },
+   {
+    "w": "controversial",
+    "m": "議論を呼ぶ"
+   },
+   {
+    "w": "implement",
+    "m": "実施する"
+   },
+   {
+    "w": "estimate",
+    "m": "見積もる"
+   },
+   {
+    "w": "contribute",
+    "m": "貢献する"
+   },
+   {
+    "w": "demand",
+    "m": "需要"
+   },
+   {
+    "w": "decline",
+    "m": "減少する"
+   },
+   {
+    "w": "reliable",
+    "m": "信頼できる"
+   },
+   {
+    "w": "authorities",
+    "m": "当局"
+   },
+   {
+    "w": "widespread",
+    "m": "広範囲の"
+   },
+   {
+    "w": "acknowledge",
+    "m": "認める"
+   },
+   {
+    "w": "launch",
+    "m": "開始する"
+   },
+   {
+    "w": "residents",
+    "m": "住民"
+   },
+   {
+    "w": "budget",
+    "m": "予算"
+   },
+   {
+    "w": "funding",
+    "m": "資金"
+   },
+   {
+    "w": "boost",
+    "m": "押し上げる"
+   },
+   {
+    "w": "urge",
+    "m": "強く求める"
+   }
+  ]
+ },
+ "de": {
+  "A1-A2": [
+   {
+    "w": "das Wetter",
+    "m": "天気"
+   },
+   {
+    "w": "der Bahnhof",
+    "m": "駅"
+   },
+   {
+    "w": "die Fahrkarte",
+    "m": "切符"
+   },
+   {
+    "w": "das Frühstück",
+    "m": "朝食"
+   },
+   {
+    "w": "der Nachbar",
+    "m": "隣人"
+   },
+   {
+    "w": "die Stadt",
+    "m": "町"
+   },
+   {
+    "w": "teuer",
+    "m": "高い"
+   },
+   {
+    "w": "billig",
+    "m": "安い"
+   },
+   {
+    "w": "müde",
+    "m": "疲れた"
+   },
+   {
+    "w": "kaufen",
+    "m": "買う"
+   },
+   {
+    "w": "suchen",
+    "m": "探す"
+   },
+   {
+    "w": "vergessen",
+    "m": "忘れる"
+   },
+   {
+    "w": "helfen",
+    "m": "手伝う"
+   },
+   {
+    "w": "der Urlaub",
+    "m": "休暇"
+   },
+   {
+    "w": "die Woche",
+    "m": "週"
+   },
+   {
+    "w": "heute",
+    "m": "今日"
+   },
+   {
+    "w": "morgen",
+    "m": "明日"
+   },
+   {
+    "w": "oft",
+    "m": "よく"
+   },
+   {
+    "w": "zusammen",
+    "m": "一緒に"
+   },
+   {
+    "w": "das Geschenk",
+    "m": "プレゼント"
+   },
+   {
+    "w": "der Schnee",
+    "m": "雪"
+   },
+   {
+    "w": "der Regen",
+    "m": "雨"
+   },
+   {
+    "w": "das Fenster",
+    "m": "窓"
+   },
+   {
+    "w": "die Schule",
+    "m": "学校"
+   }
+  ],
+  "B1": [
+   {
+    "w": "die Regierung",
+    "m": "政府"
+   },
+   {
+    "w": "die Umwelt",
+    "m": "環境"
+   },
+   {
+    "w": "die Erfahrung",
+    "m": "経験"
+   },
+   {
+    "w": "die Entscheidung",
+    "m": "決定"
+   },
+   {
+    "w": "die Gelegenheit",
+    "m": "機会"
+   },
+   {
+    "w": "der Besucher",
+    "m": "訪問者"
+   },
+   {
+    "w": "die Ausstellung",
+    "m": "展示会"
+   },
+   {
+    "w": "eröffnen",
+    "m": "開業する"
+   },
+   {
+    "w": "verbessern",
+    "m": "改善する"
+   },
+   {
+    "w": "erhöhen",
+    "m": "上げる"
+   },
+   {
+    "w": "sinken",
+    "m": "下がる"
+   },
+   {
+    "w": "ankündigen",
+    "m": "発表する"
+   },
+   {
+    "w": "die Wahl",
+    "m": "選挙"
+   },
+   {
+    "w": "der Unfall",
+    "m": "事故"
+   },
+   {
+    "w": "die Forschung",
+    "m": "研究"
+   },
+   {
+    "w": "der Verein",
+    "m": "協会"
+   },
+   {
+    "w": "der Bürgermeister",
+    "m": "市長"
+   },
+   {
+    "w": "die Gemeinde",
+    "m": "自治体"
+   },
+   {
+    "w": "beliebt",
+    "m": "人気のある"
+   },
+   {
+    "w": "gefährlich",
+    "m": "危険な"
+   },
+   {
+    "w": "ungefähr",
+    "m": "およそ"
+   },
+   {
+    "w": "bisher",
+    "m": "これまで"
+   },
+   {
+    "w": "der Bau",
+    "m": "建設"
+   },
+   {
+    "w": "die Ursache",
+    "m": "原因"
+   }
+  ],
+  "B2": [
+   {
+    "w": "die Maßnahme",
+    "m": "対策"
+   },
+   {
+    "w": "die Verordnung",
+    "m": "規則"
+   },
+   {
+    "w": "die Investition",
+    "m": "投資"
+   },
+   {
+    "w": "der Mangel",
+    "m": "不足"
+   },
+   {
+    "w": "nachhaltig",
+    "m": "持続可能な"
+   },
+   {
+    "w": "vorübergehend",
+    "m": "一時的な"
+   },
+   {
+    "w": "umstritten",
+    "m": "議論のある"
+   },
+   {
+    "w": "umsetzen",
+    "m": "実行する"
+   },
+   {
+    "w": "schätzen",
+    "m": "見積もる"
+   },
+   {
+    "w": "beitragen",
+    "m": "貢献する"
+   },
+   {
+    "w": "die Nachfrage",
+    "m": "需要"
+   },
+   {
+    "w": "zuverlässig",
+    "m": "信頼できる"
+   },
+   {
+    "w": "die Behörde",
+    "m": "当局"
+   },
+   {
+    "w": "weitreichend",
+    "m": "広範囲の"
+   },
+   {
+    "w": "einräumen",
+    "m": "認める"
+   },
+   {
+    "w": "die Bevölkerung",
+    "m": "住民"
+   },
+   {
+    "w": "der Haushalt",
+    "m": "予算"
+   },
+   {
+    "w": "die Förderung",
+    "m": "助成"
+   },
+   {
+    "w": "fordern",
+    "m": "求める"
+   },
+   {
+    "w": "der Rückgang",
+    "m": "減少"
+   },
+   {
+    "w": "die Auswirkung",
+    "m": "影響"
+   },
+   {
+    "w": "erheblich",
+    "m": "かなりの"
+   },
+   {
+    "w": "die Vereinbarung",
+    "m": "合意"
+   },
+   {
+    "w": "der Zuschuss",
+    "m": "補助金"
+   }
+  ]
+ }
+}

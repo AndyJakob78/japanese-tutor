@@ -54,6 +54,7 @@ async function generateArticle(userId, lang, opts = {}) {
     reviewWords: learn.pickReviewWords(vocab, eff.rules.reviewCount),
     weakSpots: learn.weakSpots(mistakes, lang),
     rules: eff.rules,
+    quizLater: !!opts.quizLater,
   });
 }
 

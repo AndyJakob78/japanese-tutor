@@ -27,9 +27,9 @@ router.post('/generate', async (req, res, next) => {
     if (!trial.allowed) {
       return res.status(403).json({
         error:            'TRIAL_EXHAUSTED',
-        message:          `You have used your ${FREE_TRIAL_LIMIT} free articles. Please upgrade to Pro to continue generating.`,
+        message:          `You have used your ${trial.limit || FREE_TRIAL_LIMIT} free articles. Please upgrade to Pro to continue generating.`,
         generation_count: trial.generationCount,
-        limit:            FREE_TRIAL_LIMIT,
+        limit:            trial.limit || FREE_TRIAL_LIMIT,
       });
     }
 
@@ -48,7 +48,8 @@ router.post('/generate', async (req, res, next) => {
     if (req.body.custom_topic)        overrides.custom_topic        = req.body.custom_topic;
 
     console.log(`[GENERATE] user=${req.userId.substring(0, 8)}... overrides=${JSON.stringify(overrides)}`);
-    const article = await runPipeline(overrides, req.userId);
+    // app 1.7 sends X-Quiz-Later: article first, quiz made right after while the learner reads
+    const article = await runPipeline(overrides, req.userId, { quizLater: req.get('X-Quiz-Later') === '1' });
 
     // Increment ONLY after success — failed Claude calls don't cost a trial slot
     if (!trial.isPro) {

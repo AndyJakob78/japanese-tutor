@@ -52,6 +52,13 @@ router.get('/:id/quiz', async (req, res, next) => {
     questions.sort((a, b) => (a.id || 0) - (b.id || 0));
     const romaji = isRomaji(article);
 
+    // app 1.7: the quiz may still be on its way (made after the article); a restart could lose it
+    let status = 'ready';
+    if (!questions.length && article.quiz_failed) status = 'failed';
+    else if (!questions.length && article.quiz_pending) {
+      status = Date.now() - Date.parse(article.quiz_started_at || 0) > 5 * 60 * 1000 ? 'failed' : 'pending';
+    }
+
     res.json({
       article_id: article.id,
       article_title: romaji ? spellOutNumbers(article.title_romaji) : article.title_romaji,
@@ -59,6 +66,7 @@ router.get('/:id/quiz', async (req, res, next) => {
       total: questions.length,
       answered: questions.filter(q => q.answered_at !== null && q.answered_at !== undefined).length,
       correct: questions.filter(q => q.answered_correctly === 1 || q.answered_correctly === true).length,
+      status,
     });
   } catch (err) {
     next(err);

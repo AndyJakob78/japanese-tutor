@@ -180,6 +180,7 @@ struct TypedReviewView: View {
         }
         .padding()
         .navigationTitle(L("Daily Review", "毎日の復習"))
+        .kotonomeScreen()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -226,7 +227,7 @@ struct TypedReviewView: View {
             .focused($fieldFocused)
             .disabled(viewModel.feedback != nil)
             .padding()
-            .background(Color(.systemGray6))
+            .background(Color.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .onSubmit { Task { await viewModel.submit() } }
             .onAppear { fieldFocused = true }
@@ -314,9 +315,8 @@ struct TypedReviewView: View {
 
     private var summary: some View {
         VStack(spacing: 16) {
-            Image(systemName: viewModel.missed.isEmpty ? "star.fill" : "checkmark.seal.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(viewModel.missed.isEmpty ? .yellow : .accentColor)
+            SheepResult(perfect: viewModel.missed.isEmpty,
+                        good: viewModel.total > 0 && viewModel.firstTryCorrect * 10 >= viewModel.total * 7)
             Text(L("\(viewModel.firstTryCorrect) / \(viewModel.total) on the first try", "\(viewModel.total)語中 \(viewModel.firstTryCorrect)語が一回で正解"))
                 .font(.title2.weight(.bold))
             if !viewModel.missed.isEmpty {
@@ -329,7 +329,7 @@ struct TypedReviewView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
-                .background(Color(.systemGray6))
+                .background(Color.cardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
             Button(L("Done", "完了")) { dismiss() }

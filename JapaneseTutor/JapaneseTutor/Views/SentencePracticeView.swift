@@ -120,6 +120,7 @@ struct SentencePracticeView: View {
             .padding()
         }
         .navigationTitle(L("Build Sentences", "文を作る"))
+        .kotonomeScreen()
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { viewModel.setUp(vocabulary: article.vocabulary ?? []) }
         .task { await viewModel.loadFocus() }
@@ -155,7 +156,7 @@ struct SentencePracticeView: View {
             .autocorrectionDisabled()
             .focused($isEditing)
             .padding(12)
-            .background(Color(.systemGray6))
+            .background(Color.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 10))
 
         if LearningLanguage.current.isJapanese {
@@ -318,9 +319,9 @@ struct SentencePracticeView: View {
     private var summary: some View {
         let perfect = viewModel.rounds.filter { $0.result?.verdict == "correct" }.count
         VStack(spacing: 16) {
-            Image(systemName: perfect == viewModel.rounds.count ? "star.fill" : "text.badge.checkmark")
-                .font(.system(size: 56))
-                .foregroundStyle(perfect == viewModel.rounds.count ? .yellow : .accentColor)
+            SheepResult(perfect: perfect == viewModel.rounds.count,
+                        good: perfect * 10 >= viewModel.rounds.count * 7,
+                        perfectText: L("Mē~! Every sentence perfect!", "めぇ〜！全部の文が完璧！"))
             Text(L("\(perfect) of \(viewModel.rounds.count) perfect", "\(viewModel.rounds.count)文中 \(perfect)文が完璧"))
                 .font(.title2.weight(.bold))
             Text(L("Every sentence you write yourself makes these words stick better than reading them.", "自分で文を書くと、読むだけよりも単語がしっかり身につきます。"))

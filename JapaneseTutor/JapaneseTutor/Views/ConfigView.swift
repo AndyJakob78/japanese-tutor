@@ -148,7 +148,27 @@ struct ConfigView: View {
                     }
 
                     if viewModel.config.topics.count < 10 {
-                        AddItemRow(placeholder: L("e.g. sports, art, food...", "例: スポーツ、アート、食べ物…")) { newTopic in
+                        // One-tap suggestions (the same topics as in setup)
+                        let missing = OnboardingViewModel.topicChoices.filter { !viewModel.config.topics.contains($0) }
+                        if !missing.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(missing, id: \.self) { topic in
+                                        Button {
+                                            viewModel.addTopic(topic)
+                                        } label: {
+                                            Label(Labels.topic(topic), systemImage: "plus")
+                                                .font(.subheadline)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 6)
+                                                .background(Color.accentColor.opacity(0.12), in: Capsule())
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        }
+                        AddItemRow(placeholder: L("Your own topic, e.g. ramen, baseball…", "自分のテーマ　例: ラーメン、野球…")) { newTopic in
                             viewModel.addTopic(newTopic)
                         }
                     }
@@ -269,9 +289,12 @@ struct ConfigView: View {
                             if viewModel.isSaving {
                                 ProgressView()
                                     .padding(.trailing, 8)
+                            } else if viewModel.savedMessage != nil {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                             }
-                            Text(L("Save Settings", "設定を保存"))
+                            Text(viewModel.savedMessage != nil ? L("Saved", "保存しました") : L("Save Settings", "設定を保存"))
                                 .fontWeight(.semibold)
+                                .contentTransition(.opacity)
                             Spacer()
                         }
                     }
@@ -280,16 +303,42 @@ struct ConfigView: View {
             }
         }
         .navigationTitle(L("Settings", "設定"))
+        .kotonomeScreen()
         .task {
             await viewModel.loadConfig()
         }
-        .alert(L("Saved", "保存しました"), isPresented: .init(
-            get: { viewModel.savedMessage != nil },
-            set: { if !$0 { viewModel.savedMessage = nil } }
+        // Saved: the button shows a tick and a sheep note pops up for a moment; you stay here
+        .overlay(alignment: .bottom) {
+            if viewModel.savedMessage != nil {
+                HStack(spacing: 10) {
+                    Image("CornerCheer").resizable().scaledToFit().frame(width: 40, height: 50)
+                    Text(L("Saved. Your next article uses these settings.", "保存しました。次の記事からこの設定を使います。"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.meadowNavy)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color(red: 1, green: 0.992, blue: 0.973), in: Capsule())
+                .overlay(Capsule().stroke(Color.accentColor.opacity(0.6), lineWidth: 1.5))
+                .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+                .padding(.bottom, 90)
+                .padding(.horizontal, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .task {
+                    try? await Task.sleep(for: .seconds(2.5))
+                    withAnimation { viewModel.savedMessage = nil }
+                }
+            }
+        }
+        .animation(.spring(response: 0.35), value: viewModel.savedMessage)
+        // a failed save used to look like "nothing happened"
+        .alert(L("Not saved", "保存できませんでした"), isPresented: .init(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
         )) {
-            Button("OK") { viewModel.savedMessage = nil }
+            Button("OK") { viewModel.errorMessage = nil }
         } message: {
-            Text(viewModel.savedMessage ?? "")
+            Text(L("Please check your connection and try again.", "通信を確認して、もう一度お試しください。"))
         }
     }
 }

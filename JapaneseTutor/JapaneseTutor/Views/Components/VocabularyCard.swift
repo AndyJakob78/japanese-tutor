@@ -53,7 +53,7 @@ struct VocabularyCard: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 12)
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 

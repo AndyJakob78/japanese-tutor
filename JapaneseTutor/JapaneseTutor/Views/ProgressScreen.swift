@@ -48,6 +48,8 @@ struct StatsView: View {
         ScrollView {
             if let p = viewModel.progress {
                 VStack(alignment: .leading, spacing: 18) {
+                    MeadowCard(progress: p)
+                    .onAppear { HerdMemory.rememberIfFirst(p) }
                     headline(p)
                     paceButtons(p)
                     levelPath(p)
@@ -56,7 +58,7 @@ struct StatsView: View {
                     if let gain = p.weekGain { weekGain(gain, p) }
                     goalsBlock(p.goals)
                     if let spot = p.weakSpot { weakSpot(spot) }
-                    badgesBlock(p.badges)
+                    herdBlock(p)
                     NavigationLink(destination: StatsDetailsView()) {
                         HStack {
                             Text(L("All numbers", "くわしい数字"))
@@ -77,7 +79,8 @@ struct StatsView: View {
                 ProgressView().padding(.top, 120)
             }
         }
-        .navigationTitle(L("Progress", "進み具合"))
+        .navigationTitle(L("My meadow", "わたしの牧場"))
+        .kotonomeScreen()
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
         .fullScreenCover(isPresented: $showReview, onDismiss: { Task { await viewModel.load() } }) {
@@ -451,41 +454,138 @@ struct StatsView: View {
         .card()
     }
 
-    // MARK: 7. Badges
+    // MARK: 7. Your herd — every badge is a sheep friend; the closest one is the next goal
 
-    private func badgesBlock(_ badges: [LearningProgress.Badge]) -> some View {
-        let earned = badges.filter { $0.earnedAt != nil }
-        // earned ones first, then the next one to reach in each group
-        let locked = ["level", "streak", "typed", "articles"].compactMap { group in badges.first { $0.group == group && $0.earnedAt == nil } }
-        let shown = Array((earned + locked).prefix(8))
+    private struct HerdItem: Identifiable {
+        let badge: LearningProgress.Badge
+        let current: Int, target: Int
+        var id: String { badge.key }
+        var earned: Bool { badge.earnedAt != nil }
+        var share: Double { target > 0 ? min(1, Double(current) / Double(target)) : 0 }
+        var toGo: Int { max(0, target - current) }
+    }
+
+    private static let friendPoses = ["CornerWave", "CornerCheer", "CornerCross", "CornerPeek", "CornerComfort", "CornerLookDown"]
+
+    private func herdItems(_ p: LearningProgress) -> [HerdItem] {
+        p.badges.compactMap { b in
+            let target = Int(b.value.text) ?? 0
+            switch b.group {
+            case "articles": return HerdItem(badge: b, current: p.totals.articlesRead ?? 0, target: target)
+            case "typed": return HerdItem(badge: b, current: p.totals.typedRight ?? 0, target: target)
+            case "streak": return HerdItem(badge: b, current: p.streak.current, target: target)
+            default: // level badges: only the learner's current level has a count to show
+                if b.earnedAt != nil { return HerdItem(badge: b, current: 1, target: 1) }
+                guard b.value.text == p.level else { return nil }
+                return HerdItem(badge: b, current: p.progress.known, target: p.progress.total)
+            }
+        }
+    }
+
+    private func herdBlock(_ p: LearningProgress) -> some View {
+        let items = herdItems(p)
+        let earned = items.filter(\.earned)
+        // per group only the nearest locked friend, closest first
+        let locked = Dictionary(grouping: items.filter { !$0.earned }, by: { $0.badge.group })
+            .compactMap { $0.value.min { $0.target < $1.target } }
+            .sorted { $0.share > $1.share }
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
-                sectionLabel(L("Badges", "バッジ"))
+                sectionLabel(L("Your herd", "あなたの群れ"))
                 Spacer()
-                Text(L("\(earned.count) of \(badges.count)", "\(earned.count) / \(badges.count)")).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                Text(L("\(earned.count) friend\(earned.count == 1 ? "" : "s")", "仲間 \(earned.count)匹")).font(.caption).foregroundStyle(.secondary)
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: 4), spacing: 14) {
-                ForEach(shown) { badge in
-                    let on = badge.earnedAt != nil
-                    VStack(spacing: 5) {
-                        Text(badge.value.text == "A1-A2" ? "A2" : badge.value.text)
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                            .minimumScaleFactor(0.6)
-                            .lineLimit(1)
-                            .foregroundStyle(on ? .white : Color(.systemGray))
-                            .frame(width: 50, height: 50)
-                            .background(on ? Color.pathIndigo : Color(.systemGray5), in: Circle())
-                        Text(badgeName(badge))
-                            .font(.caption2)
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(on ? Color.primary : Color.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+            if let next = locked.first { nextFriend(next) }
+            // the herd: friends you have, then the ones still waiting (with how far you are)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(Array(earned.enumerated()), id: \.element.id) { i, item in
+                        friend(item, pose: Self.friendPoses[i % Self.friendPoses.count])
                     }
-                    .frame(maxWidth: .infinity, alignment: .top)
+                    ForEach(Array(locked.dropFirst().enumerated()), id: \.element.id) { i, item in
+                        friend(item, pose: Self.friendPoses[(earned.count + i + 1) % Self.friendPoses.count])
+                    }
                 }
+                .padding(.vertical, 2)
             }
         }
         .card()
+    }
+
+    /// The closest friend: what it takes, how far you are, and one button to get there.
+    private func nextFriend(_ item: HerdItem) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 14) {
+                Image(Self.friendPoses[1]).resizable().renderingMode(.template).scaledToFit()
+                    .foregroundStyle(Color.secondary.opacity(0.35))
+                    .frame(width: 54, height: 72)
+                    .overlay(Text("?").font(.title2.weight(.bold)).foregroundStyle(.secondary))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L("Next friend", "次の仲間")).font(.caption.weight(.semibold)).foregroundStyle(Color.meadowLeaf)
+                    Text(toGoText(item)).font(.system(.headline, design: .rounded)).fixedSize(horizontal: false, vertical: true)
+                    ProgressView(value: item.share).tint(Color.meadowLeaf)
+                    Text("\(item.current) / \(item.target)").font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                }
+            }
+            Button { goFor(item) } label: {
+                Text(goText(item))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(Color.accentColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 12))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.accentColor)
+        }
+        .padding(12)
+        .background(Color.meadowLeaf.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func friend(_ item: HerdItem, pose: String) -> some View {
+        VStack(spacing: 4) {
+            Group {
+                if item.earned {
+                    Image(pose).resizable().scaledToFit()
+                } else {
+                    Image(pose).resizable().renderingMode(.template).scaledToFit().foregroundStyle(Color.secondary.opacity(0.28))
+                }
+            }
+            .frame(width: 50, height: 66)
+            Text(badgeName(item.badge)).font(.caption2.weight(item.earned ? .semibold : .regular))
+                .foregroundStyle(item.earned ? Color.primary : Color.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+            if !item.earned {
+                Text("\(item.current)/\(item.target)").font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+            }
+        }
+        .frame(width: 76)
+    }
+
+    private func toGoText(_ item: HerdItem) -> String {
+        let n = item.toGo
+        switch item.badge.group {
+        case "articles": return L("Read \(n) more article\(n == 1 ? "" : "s")", "あと\(n)本の記事を読む")
+        case "typed": return L("Type \(n) more words right", "あと\(n)語を正しく入力")
+        case "streak": return L("Learn \(n) more day\(n == 1 ? "" : "s") in a row", "あと\(n)日続けて学習")
+        default: return L("Learn \(n) more \(item.badge.value.text) words", "\(item.badge.value.text)の単語をあと\(n)語")
+        }
+    }
+
+    private func goText(_ item: HerdItem) -> String {
+        switch item.badge.group {
+        case "articles": return L("Read an article", "記事を読む")
+        case "typed": return L("Type words now", "単語を入力する")
+        case "streak": return L("Learn today", "今日の学習をする")
+        default: return L("Review words", "単語を復習する")
+        }
+    }
+
+    private func goFor(_ item: HerdItem) {
+        switch item.badge.group {
+        case "articles": TabRouter.shared.tab = 0
+        default: showReview = true    // typed words, streak and level all grow with the daily review
+        }
     }
 
     private func badgeName(_ b: LearningProgress.Badge) -> String {
@@ -532,7 +632,7 @@ private extension View {
         self
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
+            .background(Color.cardBackground, in: RoundedRectangle(cornerRadius: 22))
             .overlay(RoundedRectangle(cornerRadius: 22).stroke(Color(.separator).opacity(0.35), lineWidth: 1))
     }
 }

@@ -10,6 +10,9 @@
 
 const { firestore, collections } = require('./firestore');
 
+// Extra free articles from invite codes (1.7). Lazy require: referralService needs firestore too.
+const bonusFor = (deviceId) => require('./referralService').getBonus(deviceId).catch(() => 0);
+
 const FREE_TRIAL_LIMIT = 3;
 
 // ── Read-only status check ────────────────────────────────────────────────────
@@ -17,11 +20,13 @@ const FREE_TRIAL_LIMIT = 3;
 // Does NOT write to Firestore — increment is a separate step after success.
 
 async function checkTrialStatus(deviceId) {
-  const doc = await collections.devices.doc(deviceId).get();
+  // read in parallel: the invite bonus adds no waiting time to generation
+  const [doc, bonus] = await Promise.all([collections.devices.doc(deviceId).get(), bonusFor(deviceId)]);
+  const limit = FREE_TRIAL_LIMIT + bonus;
 
   if (!doc.exists) {
     // First-ever request from this device — allow it (doc created on first increment)
-    return { allowed: true, isPro: false, generationCount: 0 };
+    return { allowed: true, isPro: false, generationCount: 0, limit };
   }
 
   const data = doc.data();
@@ -29,14 +34,14 @@ async function checkTrialStatus(deviceId) {
   const count    = data.generation_count || 0;
 
   if (isPro) {
-    return { allowed: true, isPro: true, generationCount: count };
+    return { allowed: true, isPro: true, generationCount: count, limit };
   }
 
-  if (count >= FREE_TRIAL_LIMIT) {
-    return { allowed: false, isPro: false, generationCount: count };
+  if (count >= limit) {
+    return { allowed: false, isPro: false, generationCount: count, limit };
   }
 
-  return { allowed: true, isPro: false, generationCount: count };
+  return { allowed: true, isPro: false, generationCount: count, limit };
 }
 
 // ── Post-success increment ────────────────────────────────────────────────────
@@ -89,14 +94,16 @@ async function upgradeDeviceToPro(deviceId) {
 // Used by GET /api/device/status so the app can show "2 of 3 free articles used".
 
 async function getDeviceStatus(deviceId) {
-  const doc = await collections.devices.doc(deviceId).get();
+  const [doc, bonus] = await Promise.all([collections.devices.doc(deviceId).get(), bonusFor(deviceId)]);
+  const limit = FREE_TRIAL_LIMIT + bonus;
 
   if (!doc.exists) {
     return {
       device_id:        deviceId,
       generation_count: 0,
       is_pro:           false,
-      trials_remaining: FREE_TRIAL_LIMIT,
+      trials_remaining: limit,
+      bonus_articles:   bonus,
     };
   }
 
@@ -108,7 +115,8 @@ async function getDeviceStatus(deviceId) {
     device_id:        deviceId,
     generation_count: count,
     is_pro:           isPro,
-    trials_remaining: isPro ? null : Math.max(0, FREE_TRIAL_LIMIT - count),
+    trials_remaining: isPro ? null : Math.max(0, limit - count),
+    bonus_articles:   bonus,
   };
 }
 

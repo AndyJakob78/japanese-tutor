@@ -227,14 +227,25 @@ struct TappableRomajiText: View {
                     lookupTooltip(lookup)
                 }
             }
+            // The sheep sits on the card's top edge and looks down at the meaning
+            .overlay(alignment: .topTrailing) {
+                CornerSheep(pose: .lookDown, width: 52, flipped: true)
+                    .offset(x: -18, y: -50)
+            }
             .padding(.horizontal, 16)
-            .padding(.top, 22)
+            .padding(.top, 52)
             .padding(.bottom, 8)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
             .presentationDetents([.height(max(cardHeight, 90))])
             .presentationDragIndicator(.visible)
             .presentationBackgroundInteraction(.enabled)
             .presentationCornerRadius(22)
+        }
+        // Leaving the article (quiz, back) closes the word card; it used to stay open on top
+        .onDisappear {
+            tappedWord = nil
+            lookup = nil
+            tappedParagraphIndex = -1
         }
     }
 
@@ -363,7 +374,7 @@ struct TappableRomajiText: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
@@ -410,7 +421,7 @@ struct TappableRomajiText: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .transition(.opacity.combined(with: .move(edge: .top)))
     }

@@ -1,4 +1,5 @@
 import SwiftUI
+import AdServices
 
 // MARK: - OnboardingViewModel
 
@@ -6,8 +7,24 @@ import SwiftUI
 class OnboardingViewModel {
     // Step tracking
     var currentStep: Int = 0
-    /// Japanese has a fourth step (writing system); German and English have one script.
-    let totalSteps = LearningLanguage.current.isJapanese ? 4 : 3
+    /// Topics, places, level, (writing system — Japanese only), almost done (where heard, invite code).
+    let totalSteps = LearningLanguage.current.isJapanese ? 5 : 4
+
+    enum Step { case topics, places, level, writing, finish }
+    var step: Step {
+        switch currentStep {
+        case 0: return .topics
+        case 1: return .places
+        case 2: return .level
+        case 3: return LearningLanguage.current.isJapanese ? .writing : .finish
+        default: return .finish
+        }
+    }
+
+    // Last step — both optional (1.7)
+    var whereHeard: String?
+    var inviteCode: String = ""
+    var stepsSkipped: [String] = []
 
     // Step 1 — Topics (max 8)
     var selectedTopics: Set<String> = []
@@ -32,10 +49,12 @@ class OnboardingViewModel {
 
     // MARK: Predefined options
 
-    let predefinedTopics = [
-        "politics", "technology", "finance", "sport",
-        "science", "culture", "environment", "health"
+    /// Easy-to-tell everyday topics first; "your own topic" stays below the chips.
+    static let topicChoices = [
+        "local news", "food", "travel", "family", "holidays", "sport",
+        "beauty", "weather", "technology", "science", "health", "business", "politics", "environment",
     ]
+    let predefinedTopics = OnboardingViewModel.topicChoices
 
     /// The countries of the language first: German news comes from Germany,
     /// Austria and Switzerland, English news from the English-speaking world.
@@ -56,9 +75,7 @@ class OnboardingViewModel {
         switch currentStep {
         case 0: return !selectedTopics.isEmpty
         case 1: return !selectedRegions.isEmpty
-        case 2: return true   // N5 pre-selected
-        case 3: return true   // romaji pre-selected
-        default: return false
+        default: return true  // level and writing system pre-selected; the last step is optional
         }
     }
 
@@ -105,15 +122,16 @@ class OnboardingViewModel {
     // MARK: Skip — fill sensible defaults when user skips a step empty
 
     func skipCurrentStep() {
+        stepsSkipped.append("\(step)")
         switch currentStep {
         case 0:
             if selectedTopics.isEmpty {
-                selectedTopics = LearningLanguage.current.isJapanese
-                    ? ["politics", "technology", "finance", "sport"]
-                    : ["science", "technology", "culture", "sport"]   // easy to tell in simple words
+                selectedTopics = ["local news", "food", "travel", "holidays"]   // easy to tell in simple words
             }
         case 1:
-            if selectedRegions.isEmpty {
+            if selectedRegions.isEmpty, let suggested = PlaceFinder.timeZoneSuggestions().first.map({ [$0.lowercased()] }) {
+                selectedRegions = Set(suggested)
+            } else if selectedRegions.isEmpty {
                 switch LearningLanguage.current {
                 case .japanese: selectedRegions = ["japan", "germany", "united states"]
                 case .german:   selectedRegions = ["germany", "austria", "switzerland"]
@@ -131,6 +149,22 @@ class OnboardingViewModel {
         guard currentStep < totalSteps - 1 else { return }
         currentStep += 1
         showCelebration = false
+    }
+
+    // MARK: Attribution — where the learner came from (no personal data)
+
+    func attributionFields() -> [String: Any] {
+        var f: [String: Any] = [
+            "phone_language": Locale.preferredLanguages.first ?? "",
+            "time_zone": TimeZone.current.identifier,
+            "places": Array(selectedRegions.sorted()),
+            "topics": Array(selectedTopics.sorted()),
+            "steps_skipped": stepsSkipped,
+            "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
+        ]
+        if let whereHeard { f["where_heard"] = whereHeard }
+        if let token = try? AAAttribution.attributionToken() { f["ads_token"] = token }
+        return f
     }
 
     // MARK: Config payload — matches keys used in ConfigView.saveConfig()
@@ -161,6 +195,12 @@ struct OnboardingFlowView: View {
                 // Step content — slides in from the right on each advance
                 Group {
                     switch vm.currentStep {
+                    case _ where vm.step == .finish:
+                        OnboardingFinishView(vm: vm)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing),
+                                removal:   .move(edge: .leading)
+                            ))
                     case 0:
                         OnboardingTopicsView(vm: vm)
                             .transition(.asymmetric(
@@ -197,6 +237,7 @@ struct OnboardingFlowView: View {
         }
         .animation(.easeInOut(duration: 0.4), value: vm.showCompletion)
         .ignoresSafeArea(edges: .bottom)
+        .background(Color.appBackground.ignoresSafeArea())
         .onChange(of: vm.isReadyToFinish) { _, ready in
             if ready { onComplete() }
         }
@@ -298,7 +339,18 @@ struct OnboardingFlowView: View {
         vm.isSaving = true
         do {
             try await APIClient.shared.updateConfig(vm.buildConfigPayload())
+            // Invite code: a wrong code keeps the learner here to fix or clear it
+            let code = vm.inviteCode.trimmingCharacters(in: .whitespaces)
+            if !code.isEmpty, let problem = try await APIClient.shared.redeemInvite(code: code) {
+                await MainActor.run {
+                    vm.saveError = OnboardingFinishView.message(for: problem)
+                    vm.isSaving = false
+                }
+                return
+            }
             UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+            let fields = vm.attributionFields()
+            Task.detached { await APIClient.shared.sendAttribution(fields) }
             await MainActor.run {
                 vm.isSaving = false
                 vm.showCompletion = true
@@ -392,7 +444,7 @@ struct ChipGridView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                         .frame(maxWidth: .infinity)
-                        .background(isSelected(item) ? Color.accentColor : Color(.systemGray5))
+                        .background(isSelected(item) ? Color.accentColor : Color.cardBackground)
                         .foregroundStyle(isSelected(item) ? .white : .primary)
                         .clipShape(Capsule())
                         .opacity(isDisabled(item) ? 0.4 : 1.0)
@@ -403,6 +455,18 @@ struct ChipGridView: View {
             }
         }
     }
+}
+
+// MARK: - Sheep hero (1.7)
+
+func onboardingHeroSheep(_ image: String) -> some View {
+    Image(image)
+        .resizable()
+        .scaledToFill()
+        .frame(width: 112, height: 112)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color.cardBackground, lineWidth: 4))
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
 }
 
 // MARK: - heroIcon helper

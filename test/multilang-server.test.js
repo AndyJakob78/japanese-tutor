@@ -44,7 +44,13 @@ async function startApp({ pro = false, used = 0 } = {}) {
   app.use('/api', (req, res, next) => { req.userId = req.headers['x-user-id']; next(); });
   app.use('/api', createMiddleware({
     storeFor: lang => (stores[lang] ||= createStore(cols[lang], async () => ++ids[lang])),
-    generateArticle: async (userId, lang, opts) => { state.generated++; state.requests.push(opts); return pipelineOutput(lang); },
+    generateArticle: async (userId, lang, opts) => {
+      state.generated++; state.requests.push(opts);
+      if (!opts.quizLater) return pipelineOutput(lang);
+      // quiz made after the article: resolves when the test calls state.finishQuiz()
+      const later = new Promise(r => { state.finishQuiz = () => r({ questions: pipelineOutput(lang).quiz, problems: [] }); });
+      return { ...pipelineOutput(lang), quiz: [], _makeQuiz: () => later };
+    },
     progress: {
       bump: async (req, lang, counts) => { const k = `${req.userId}|${lang}`; const d = (state.progress[k] ||= { days: { today: {} } }).days.today; for (const [kind, n] of Object.entries(counts)) if (n) d[kind] = (d[kind] || 0) + n; },
       load: async (userId, lang) => { const r = state.progress[`${userId}|${lang}`]; return r ? { days: { [new Date().toISOString().slice(0, 10)]: r.days.today }, ...r.extra } : {}; },
@@ -63,9 +69,9 @@ async function startApp({ pro = false, used = 0 } = {}) {
   }));
   app.use('/api', (req, res) => res.json({ japanese: true, path: req.path })); // stands in for the existing Japanese routes
   const server = await new Promise(r => { const s = app.listen(0, () => r(s)); });
-  const call = async (method, path, { lang, user = 'user-A', body, api } = {}) => {
+  const call = async (method, path, { lang, user = 'user-A', body, api, headers = {} } = {}) => {
     const res = await fetch(`http://127.0.0.1:${server.address().port}/api${path}`, {
-      method, headers: { 'x-user-id': user, 'content-type': 'application/json', ...(lang ? { 'x-learning-language': lang } : {}), ...(api ? { 'x-client-api': String(api) } : {}) },
+      method, headers: { 'x-user-id': user, 'content-type': 'application/json', ...(lang ? { 'x-learning-language': lang } : {}), ...(api ? { 'x-client-api': String(api) } : {}), ...headers },
       body: body ? JSON.stringify(body) : undefined,
     });
     return { status: res.status, json: await res.json() };
@@ -427,5 +433,27 @@ test('1.6 progress: activity is recorded per language and day, and the screen da
     assert.strictEqual(app.state.progress['user-A|de'].days.today.typed, 2);
     assert.strictEqual((await app.call('GET', '/progress', { lang: 'de' })).status, 501);
     assert.strictEqual((await app.call('GET', '/progress', {})).json.japanese, true);
+  } finally { app.close(); }
+});
+
+
+test('1.7 quiz later: the article comes first, the quiz shows "pending" until it is saved', async () => {
+  const app = await startApp();
+  try {
+    const made = await app.call('POST', '/articles/generate', { ...v2, headers: { 'x-quiz-later': '1' }, body: {} });
+    assert.strictEqual(made.status, 201);
+    assert.strictEqual(app.state.requests[0].quizLater, true);
+    let quiz = (await app.call('GET', '/articles/1/quiz', v2)).json;
+    assert.strictEqual(quiz.status, 'pending');
+    assert.strictEqual(quiz.questions.length, 0);
+    app.state.finishQuiz();
+    await new Promise(r => setTimeout(r, 30));
+    quiz = (await app.call('GET', '/articles/1/quiz', v2)).json;
+    assert.strictEqual(quiz.status, 'ready');
+    assert.strictEqual(quiz.questions.length, 4);
+    // without the header (older apps) the quiz comes with the article, as before
+    await app.call('POST', '/articles/generate', { ...v2, body: {} });
+    assert.strictEqual(app.state.requests[1].quizLater, undefined);
+    assert.strictEqual((await app.call('GET', '/articles/2/quiz', v2)).json.questions.length, 4);
   } finally { app.close(); }
 });

@@ -18,7 +18,7 @@ struct OnboardingLevelView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                onboardingHeroIcon(systemImage: "graduationcap.fill")
+                onboardingHeroSheep("SheepQuiz")
                     .padding(.top, 40)
 
                 VStack(spacing: 8) {

@@ -5,7 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { firestore, collections } = require('../services/firestore');
+const { firestore, collections, DEFAULT_CONFIG } = require('../services/firestore');
 
 // Keys the app may add for German / English, with their allowed values.
 const LANGUAGE_KEYS = {
@@ -65,6 +65,11 @@ router.put('/', async (req, res, next) => {
       // Settings for the other learning languages do not exist for older
       // accounts — create them the first time the app sends them.
       if (!validDocs[key] && LANGUAGE_KEYS[key] && LANGUAGE_KEYS[key].includes(serialized)) {
+        batch.set(collections.config.doc(), { key, value: serialized, user_id: req.userId, updated_at: new Date().toISOString() });
+        continue;
+      }
+      // A normal setting that older accounts never got (news_timeframe_hours): create it
+      if (!validDocs[key] && Object.prototype.hasOwnProperty.call(DEFAULT_CONFIG, key)) {
         batch.set(collections.config.doc(), { key, value: serialized, user_id: req.userId, updated_at: new Date().toISOString() });
         continue;
       }

@@ -78,6 +78,7 @@ const DEFAULT_CONFIG = {
   vocabulary_goal_weekly: '30',
   preferred_categories: '["politics","economy","technology","society"]',
   writing_system: 'romaji',
+  news_timeframe_hours: '48', // was missing: Settings could not save it and the search prompt said "last undefined hours"
 };
 
 // Initialize default config for a specific user if they don't have config yet.
@@ -106,4 +107,4 @@ async function initializeConfigForUser(userId) {
   await batch.commit();
 }
 
-module.exports = { firestore, collections, collectionsFor, getNextId, initializeConfigForUser };
+module.exports = { firestore, collections, collectionsFor, getNextId, initializeConfigForUser, DEFAULT_CONFIG };

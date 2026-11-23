@@ -10,7 +10,7 @@
 // Target: ~25-40 seconds total
 
 const { callClaudeJSON, callClaudeSearchJSON } = require('../server/services/claude');
-const { firestore, collections, getNextId } = require('../server/services/firestore');
+const { firestore, collections, getNextId, DEFAULT_CONFIG } = require('../server/services/firestore');
 const { normalizeBody, normalizeWord } = require('./middleware/normalize');
 const { runQualityReviewer } = require('./middleware/quality-reviewer');
 const { lintArticle, lintDraft, summarize: summarizeLint } = require('./middleware/article-lint');
@@ -44,7 +44,11 @@ async function loadConfig(userId) {
   const snapshot = await collections.config
     .where('user_id', '==', userId)
     .get();
+  // defaults first, so a setting an older account never got is never "undefined" in a prompt
   const config = {};
+  for (const [key, value] of Object.entries(DEFAULT_CONFIG)) {
+    try { config[key] = JSON.parse(value); } catch { config[key] = value; }
+  }
   for (const doc of snapshot.docs) {
     const data = doc.data();
     try {
@@ -1865,7 +1869,7 @@ async function prefetchAllData(userId, overrides) {
 // =============================================
 // MAIN PIPELINE
 // =============================================
-async function runPipeline(overrides = {}, userId) {
+async function runPipeline(overrides = {}, userId, { quizLater = false } = {}) {
   if (!userId) {
     throw new Error('userId is required for pipeline execution');
   }
@@ -1959,6 +1963,23 @@ async function runPipeline(overrides = {}, userId) {
           `Saving anyway — user will get an imperfect article rather than no article.`
         );
       }
+    }
+
+    // App 1.7 (quizLater): save and return the article now; the quiz is made right after,
+    // with the same steps and checks, while the learner reads. Cuts the wait by about half.
+    if (quizLater) {
+      const articleId = await getNextId('articles');
+      const savedArticle = await saveToDatabase(articleId, articleData, newsData, { questions: [] }, userId, config);
+      await collections.articles.doc(String(articleId)).update({ quiz_pending: true, quiz_started_at: new Date().toISOString() });
+      console.log(`\n  Article ready (${((Date.now() - startTime) / 1000).toFixed(1)}s), id ${articleId} — quiz follows in the background\n`);
+      generateQuiz(articleData, config, quizReviewWords)
+        .then(quiz => saveQuizLater(articleId, quiz, userId))
+        .then(() => console.log(`[Quiz later] article ${articleId} quiz saved (${((Date.now() - startTime) / 1000).toFixed(1)}s after start)`))
+        .catch(async err => {
+          console.error(`[Quiz later] article ${articleId} failed: ${err.message}`);
+          await collections.articles.doc(String(articleId)).update({ quiz_pending: false, quiz_failed: true }).catch(() => {});
+        });
+      return { ...savedArticle, quiz_pending: true };
     }
 
     // Call 3: Quiz generation + article ID — both start in parallel
@@ -2190,6 +2211,34 @@ async function saveToDatabase(articleId, articleData, newsData, quiz, userId, co
 
   await batch.commit();
   return await getArticleWithDetails(articleId, userId);
+}
+
+/**
+ * Save a quiz that was made after its article (quizLater). Words are linked by their
+ * romaji, as saveToDatabase does when a quiz word is not among the article's new words.
+ */
+async function saveQuizLater(articleId, quiz, userId) {
+  const batch = firestore.batch();
+  for (const q of (quiz.questions || [])) {
+    let vocabId = null;
+    if (q.vocabulary_word) {
+      const hit = await collections.vocabulary
+        .where('word_romaji_macron', '==', q.vocabulary_word)
+        .where('user_id', '==', userId)
+        .limit(1)
+        .get();
+      if (!hit.empty) vocabId = hit.docs[0].data().id;
+    }
+    const questionId = await getNextId('quizQuestions');
+    batch.set(collections.quizQuestions.doc(String(questionId)), {
+      id: questionId, user_id: userId, article_id: articleId, type: q.type,
+      question_romaji: q.question_romaji, question_en: q.question_en || null,
+      correct_answer: q.correct_answer, distractors: q.distractors || [], hint: q.hint || null,
+      vocabulary_id: vocabId, answered_correctly: null, answered_at: null,
+    });
+  }
+  batch.update(collections.articles.doc(String(articleId)), { quiz_pending: false });
+  await batch.commit();
 }
 
 /**

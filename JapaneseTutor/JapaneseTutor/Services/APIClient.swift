@@ -87,6 +87,8 @@ class APIClient {
         if let t = topic, !t.isEmpty { body["custom_topic"] = t }
 
         var request = makeRequest("/articles/generate", method: "POST")
+        // 1.7: the article comes back as soon as it is written; the quiz follows while you read
+        request.setValue("1", forHTTPHeaderField: "X-Quiz-Later")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         request.timeoutInterval = 600
 
@@ -106,6 +108,7 @@ class APIClient {
 
     func markArticleRead(id: Int) async throws {
         let _: [String: Bool] = try await patch("/articles/\(id)", body: ["read_at": true])
+        RatingRule.recordArticleRead(id)
     }
 
     func deleteArticle(id: Int, deleteVocabulary: Bool) async throws {
@@ -143,7 +146,9 @@ class APIClient {
     /// mode: "typed" (Daily Review) and "sentence" (own sentence) are recall and can make a
     /// word "known"; "choice" (multiple choice) is counted but never promotes a word.
     func recordTestResult(id: Int, correct: Bool, mode: String = "choice") async throws -> TestResultResponse {
-        return try await post("/vocabulary/\(id)/test", body: TestResultRequest(correct: correct, mode: mode))
+        let r: TestResultResponse = try await post("/vocabulary/\(id)/test", body: TestResultRequest(correct: correct, mode: mode))
+        RatingRule.recordActiveDay()
+        return r
     }
 
     /// Words for the daily typed review (due / missed / still learning first)
@@ -184,7 +189,9 @@ class APIClient {
             focus: focus,
             firstTry: firstTry
         )
-        return try await post("/practice/sentence", body: body)
+        let r: SentenceCheckResponse = try await post("/practice/sentence", body: body)
+        RatingRule.recordActiveDay()
+        return r
     }
 
     /// Sentences of an article for the read-aloud player (cloud voice)
@@ -213,7 +220,9 @@ class APIClient {
     }
 
     func submitQuiz(articleId: Int, answers: [QuizAnswer]) async throws -> QuizSubmitResponse {
-        return try await post("/articles/\(articleId)/quiz", body: QuizSubmitRequest(answers: answers))
+        let r: QuizSubmitResponse = try await post("/articles/\(articleId)/quiz", body: QuizSubmitRequest(answers: answers))
+        RatingRule.recordActiveDay()
+        return r
     }
 
     // MARK: - Config
@@ -251,6 +260,37 @@ class APIClient {
     /// Call immediately after a successful RevenueCat purchase to unlock Pro on the backend.
     func upgradeDeviceToPro() async throws -> DeviceStatus {
         return try await post("/device/upgrade", body: EmptyBody())
+    }
+
+    // MARK: - Invites and attribution (1.7)
+
+    struct ReferralCode: Decodable { let code: String }
+
+    /// This device's own invite code (shown on the share card).
+    func fetchReferralCode() async throws -> String {
+        let r: ReferralCode = try await get("/referral/code")
+        return r.code
+    }
+
+    /// A new device enters a friend's code once. Returns nil on success,
+    /// otherwise the server's reason (CODE_NOT_FOUND, OWN_CODE, ALREADY_REDEEMED, NOT_NEW_DEVICE, INVITER_CAP_REACHED).
+    func redeemInvite(code: String) async throws -> String? {
+        var request = makeRequest("/referral/redeem", method: "POST")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["code": code])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+        if (200...299).contains(http.statusCode) { return nil }
+        if http.statusCode == 400,
+           let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let error = body["error"] as? String { return error }
+        throw APIError.httpError(http.statusCode)
+    }
+
+    /// Where the learner came from — sent once at the end of setup, never blocks the learner.
+    func sendAttribution(_ fields: [String: Any]) async {
+        var request = makeRequest("/attribution", method: "POST")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: fields)
+        _ = try? await URLSession.shared.data(for: request)
     }
 
     // MARK: - Private Helpers

@@ -73,6 +73,8 @@ app.use('/api/stats', require('./routes/stats'));
 app.use('/api/progress', require('./routes/progress')); // progress screen: level, next step, streak, goals
 app.use('/api/device', require('./routes/devices')); // trial status + Pro upgrade
 app.use('/api/practice', require('./routes/practice')); // sentence building
+app.use('/api/referral', require('./routes/referral')); // invite codes (1.7)
+app.use('/api/attribution', require('./routes/attribution')); // where learners come from (1.7)
 
 // Error handling middleware
 app.use((err, req, res, next) => {

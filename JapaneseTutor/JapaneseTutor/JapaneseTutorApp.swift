@@ -15,6 +15,7 @@ struct JapaneseTutorApp: App {
         !UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
 
     init() {
+        LearningLanguage.chooseForNewInstall()
         RevenueCatService.shared.configure()
     }
 
@@ -22,8 +23,9 @@ struct JapaneseTutorApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // The learning language is chosen in Settings only (owner's decision, 2026-11-22):
-            // a new install starts as the Japanese course.
+            // There is no language question (owner's decision, 2026-11-22). A new install starts
+            // in the course that fits the phone's language (LearningLanguage.chooseForNewInstall);
+            // after that, the course is changed in Settings only.
             if showOnboarding {
                 // the same setup steps for every language
                 OnboardingFlowView {
@@ -79,7 +81,7 @@ struct ContentView: View {
                 StatsView()
             }
             .tabItem {
-                Label(L("Progress", "進み具合"), systemImage: "chart.line.uptrend.xyaxis")
+                Label(L("Meadow", "牧場"), systemImage: "leaf")
             }
             .tag(2)
 

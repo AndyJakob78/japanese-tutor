@@ -108,7 +108,10 @@ async function generate(langKey, level, news, opts = {}) {
   const lintAfter = lintArticle(article, lang, level, extra);
   console.log(`${tag} reviewer ${timings.reviewer}s, ${(review.fixes_made || []).length} fixes, code check left ${lintAfter.length}`);
 
-  t = Date.now();
+  // The quiz is its own step. With opts.quizLater (app 1.7) the article is returned at once
+  // and the route runs makeQuiz in the background; the steps and checks are the same.
+  const makeQuiz = async () => {
+  const t = Date.now();
   const q = P.quizPrompts(lang, level, article, quizCount);
   const quizTokens = quizCount > 8 ? 8192 : 4096;
   let quiz = cleanQuiz(await callClaudeJSON(q.system, q.user, { max_tokens: quizTokens }));
@@ -123,17 +126,24 @@ async function generate(langKey, level, news, opts = {}) {
     } catch (e) { console.log(`${tag} quiz repair failed: ${e.message.slice(0, 80)}`); }
   }
   timings.quiz = secs(t);
-  timings.total = Math.round((timings.writer + timings.reviewer + timings.quiz) * 10) / 10;
-  console.log(`${tag} quiz ${timings.quiz}s, ${quizProblems.length} problems — total ${timings.total}s`);
+  console.log(`${tag} quiz ${timings.quiz}s, ${quizProblems.length} problems`);
+  return { questions: quiz.questions || [], problems: quizProblems };
+  };
+
+  let quizDone = { questions: [], problems: [] };
+  if (!opts.quizLater) quizDone = await makeQuiz();
+  timings.total = Math.round((timings.writer + timings.reviewer + (timings.quiz || 0)) * 10) / 10;
+  console.log(`${tag} total ${timings.total}s${opts.quizLater ? ' (quiz follows in the background)' : ''}`);
 
   return {
-    language: langKey, level, topic: news.topic, region: news.region || '', category: news.category || '', ...article, quiz: quiz.questions || [],
+    language: langKey, level, topic: news.topic, region: news.region || '', category: news.category || '', ...article, quiz: quizDone.questions,
     sources: (news.articles || []).map(a => ({ title: a.headline, source: a.source, url: a.url })),
     _draft: draft,
     _lint_before: summarize(lintBefore),
     _reviewer_fixes: review.fixes_made || [],
     lint_warnings: summarize(lintAfter),
-    _quiz_problems: quizProblems,
+    _quiz_problems: quizDone.problems,
+    ...(opts.quizLater ? { _makeQuiz: makeQuiz } : {}),
     _timings: timings,
   };
 }

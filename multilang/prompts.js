@@ -43,14 +43,16 @@ function searchPrompts(lang, topicHint, recentTopics = [], level = 'B1', where =
   // the learner's own regions; without any, the language's home region
   const place = (where.regions || []).length ? `these places (from them or about them): ${where.regions.join(', ')}` : lang.newsRegion;
   return {
-    system: `You find one current news story for a language-learning article. Search the web, pick ONE concrete story from ${window} with clear facts (who, what, where, when, numbers). Prefer stories that are easy to tell in simple words: society, technology, science, culture, transport, sport, weather. Avoid crime details, war, protests and party politics.
+    system: `You find one current news story for a language-learning article. Search the web, pick ONE concrete story from ${window} with clear facts (who, what, where, when, numbers). Prefer stories that are easy to tell in simple words: everyday life, food and restaurants, family and children's events, travel and places to visit, culture, society, technology, science, transport, sport, weather. Avoid crime details, war and protests. Avoid party politics unless the topic wish is politics; then report it neutrally (what was decided or said, by whom), without taking sides.
+- If the message gives a topic wish, the story MUST be about that topic: a story that only touches it in passing does not fit, however big it is. If the wish names a city or place, the story must be from there; this wins over the places in the message.
+- If the topic is not news by nature (recipes, tips, hobbies), take a current news story close to it (a festival, an opening, a trend, a price change).
 - Use established news outlets or the organisation's own announcement; no blogs, no partisan sites.
 - Only report facts you actually read in the search results. If you could read only a headline, pick another story.
 - Check that weekday and date fit together; leave the weekday out if unsure.
 - You have a limited number of searches. Take the FIRST story that fits; do not keep looking for a better one. Search results (titles and snippets from several outlets) count as read when they give the facts.
 Return ONLY JSON:
 {"topic": "one sentence", "region": "...", "category": "...", "articles": [{"headline": "...", "source": "...", "url": "...", "date": "YYYY-MM-DD", "keyFacts": ["6-10 short facts in English"], "numbers": ["..."], "quotes": ["short quotes with the speaker"]}]}`,
-    user: `Today is ${today}. Find a news story from ${place}.${days < 4 ? ' If nothing fits in that time, take the most recent story that does.' : ''}${topicHint ? ` Topic wish: ${topicHint}.` : ''} Use 1-2 sources.\n${STORY_FIT[level] || ''}${topicHint && level === 'A1-A2' ? ' If the topic wish only offers hard stories, take an easy story from another topic.' : ''}` +
+    user: `Today is ${today}. Find a news story from ${place}.${days < 4 ? ' If nothing fits in that time, take the most recent story that does.' : ''}${topicHint ? ` Topic wish: ${topicHint} (the story must be about this).` : ''} Use 1-2 sources.\n${STORY_FIT[level] || ''}${topicHint && level === 'A1-A2' ? ' If the topic wish only offers hard stories, take an easy story from another topic.' : ''}` +
       (recentTopics.length ? `\nThe learner already read about these — pick a DIFFERENT story:\n${recentTopics.slice(0, 10).map(t => `- ${t}`).join('\n')}` : ''),
   };
 }

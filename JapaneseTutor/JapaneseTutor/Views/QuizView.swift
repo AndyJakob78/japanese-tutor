@@ -1,4 +1,5 @@
 import SwiftUI
+import StoreKit
 
 @Observable
 class QuizViewModel {
@@ -13,8 +14,13 @@ class QuizViewModel {
     var quizResult: QuizSubmitResponse?
     var errorMessage: String?
     var articleTitle: String = ""
+    /// 1.7: the quiz is still being made (it follows the article)
+    var quizPending = false
     /// Question ID → its answer options in the order shown
     var options: [Int: [String]] = [:]
+    /// New herd friend / chapter after this quiz (loaded after the result)
+    var moment: HerdMemory.Moment?
+    var progressAfter: LearningProgress?
 
     var currentQuestion: QuizQuestion? {
         guard currentIndex < questions.count else { return nil }
@@ -33,11 +39,22 @@ class QuizViewModel {
     func loadQuiz(articleId: Int) async {
         isLoading = true
         do {
-            let response = try await APIClient.shared.fetchQuiz(articleId: articleId)
+            var response = try await APIClient.shared.fetchQuiz(articleId: articleId)
+            // made after the article: wait for it (usually under a minute), asking every 4 s
+            var waited = 0
+            while response.status == "pending" && response.questions.isEmpty && waited < 180 {
+                isLoading = false
+                quizPending = true
+                try await Task.sleep(for: .seconds(4))
+                waited += 4
+                response = try await APIClient.shared.fetchQuiz(articleId: articleId)
+            }
+            quizPending = false
             questions = response.questions
             // Shuffle once. `allOptions` shuffles on every call, so the answers
             // used to jump to new places the moment one was tapped.
-            for q in response.questions { options[q.id] = q.allOptions }
+            // (the screen loads again when the learner comes back to it; keep the order they saw)
+            for q in response.questions where options[q.id] == nil { options[q.id] = q.allOptions }
             articleTitle = response.articleTitle
         } catch {
             errorMessage = error.localizedDescription
@@ -64,6 +81,13 @@ class QuizViewModel {
         isSubmitting = true
         do {
             quizResult = try await APIClient.shared.submitQuiz(articleId: articleId, answers: answers)
+            // Badges are counted on the server; look for a new friend without holding up the result
+            Task { @MainActor in
+                if let p = try? await APIClient.shared.fetchProgress() {
+                    progressAfter = p
+                    moment = HerdMemory.takeNew(p)
+                }
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -75,10 +99,22 @@ struct QuizView: View {
     let articleId: Int
     @State private var viewModel = QuizViewModel()
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.requestReview) private var requestReview
 
     var body: some View {
         VStack {
-            if viewModel.isLoading {
+            if viewModel.quizPending {
+                VStack(spacing: 16) {
+                    Image("CornerCross").resizable().scaledToFit().frame(height: 150)
+                    Text(L("Your quiz is almost ready…", "クイズをもうすぐ用意します…"))
+                        .font(.title3.weight(.semibold))
+                    Text(L("It is made right after the article. Just a moment.", "記事のすぐ後に作っています。少しお待ちください。"))
+                        .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    ProgressView()
+                }
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if viewModel.isLoading {
                 ProgressView(L("Loading quiz...", "クイズを読み込んでいます…"))
             } else if viewModel.isFinished {
                 quizResultView
@@ -93,6 +129,7 @@ struct QuizView: View {
             }
         }
         .navigationTitle(L("Quiz", "クイズ"))
+        .kotonomeScreen()
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.loadQuiz(articleId: articleId)
@@ -151,7 +188,14 @@ struct QuizView: View {
                     }
                 }
                 .padding(.vertical)
-                .padding(.bottom, 16)
+                .padding(.bottom, 110)   // room for the sheep
+            }
+            .overlay(alignment: .bottomTrailing) {
+                // while choosing: hooves crossed in the corner; after answering it moves into the answer box
+                if !viewModel.showFeedback {
+                    CornerSheep.quiz(answered: false, correct: false)
+                        .padding(.trailing, 10)
+                }
             }
 
             // Next button — pinned to bottom, outside scroll
@@ -216,7 +260,7 @@ struct QuizView: View {
 
     private func optionBackground(_ option: String, question: QuizQuestion) -> Color {
         guard viewModel.showFeedback else {
-            return Color(.systemGray6)
+            return Color.cardBackground
         }
         if option == question.correctAnswer {
             return Color.green.opacity(0.2)
@@ -224,7 +268,7 @@ struct QuizView: View {
         if option == viewModel.selectedOption && !viewModel.isCorrect {
             return Color.red.opacity(0.2)
         }
-        return Color(.systemGray6)
+        return Color.cardBackground
     }
 
     @ViewBuilder
@@ -238,7 +282,7 @@ struct QuizView: View {
                 .font(.body.weight(.medium))
                 .padding()
                 .frame(maxWidth: .infinity)
-                .background(Color(.systemGray6))
+                .background(Color.cardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal)
 
@@ -268,25 +312,30 @@ struct QuizView: View {
 
     @ViewBuilder
     private func feedbackView(_ question: QuizQuestion) -> some View {
-        VStack(spacing: 6) {
-            HStack {
-                Image(systemName: viewModel.isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill")
-                    .foregroundStyle(viewModel.isCorrect ? .green : .red)
-                Text(viewModel.isCorrect ? L("Correct!", "正解です") : L("Incorrect", "不正解です"))
-                    .font(.headline)
-                    .foregroundStyle(viewModel.isCorrect ? .green : .red)
-            }
+        HStack(alignment: .center, spacing: 12) {
+            // cheers when right, comforts when wrong
+            CornerSheep(pose: viewModel.isCorrect ? .cheer : .comfort, width: 64)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Image(systemName: viewModel.isCorrect ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundStyle(viewModel.isCorrect ? .green : .red)
+                    Text(viewModel.isCorrect ? L("Correct!", "正解です") : L("Incorrect — it's okay!", "不正解。だいじょうぶ！"))
+                        .font(.headline)
+                        .foregroundStyle(viewModel.isCorrect ? .green : .red)
+                }
 
-            // German / English: the hint is the explanation of the answer — worth reading after a right answer too
-            if !viewModel.isCorrect || !LearningLanguage.current.isJapanese, let hint = question.hint {
-                Text(L("Hint: \(hint)", hint))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                // German / English: the hint is the explanation of the answer — worth reading after a right answer too
+                if !viewModel.isCorrect || !LearningLanguage.current.isJapanese, let hint = question.hint {
+                    Text(L("Hint: \(hint)", hint))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            Spacer(minLength: 0)
         }
-        .padding()
+        .padding(.horizontal)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Results View
@@ -299,12 +348,14 @@ struct QuizView: View {
                     if viewModel.isSubmitting {
                         ProgressView(L("Submitting results...", "結果を保存しています…"))
                     } else if let result = viewModel.quizResult {
-                        Image(systemName: result.score.percentage >= 70 ? "star.fill" : "arrow.counterclockwise")
-                            .font(.system(size: 60))
-                            .foregroundStyle(result.score.percentage >= 70 ? .yellow : .orange)
+                        let allCorrect = result.score.total > 0 && result.score.correct == result.score.total
+                        SheepResult(perfect: allCorrect, good: result.score.percentage >= 70)
 
-                        Text(L("Quiz Complete!", "クイズ完了！"))
-                            .font(.title.weight(.bold))
+                        if let moment = viewModel.moment, !moment.isEmpty, let p = viewModel.progressAfter {
+                            HerdMomentCard(moment: moment, progress: p)
+                                .padding(.horizontal)
+                                .transition(.scale.combined(with: .opacity))
+                        }
 
                         Text(L("\(result.score.correct) / \(result.score.total) correct", "\(result.score.total)問中 \(result.score.correct)問正解"))
                             .font(.title2)
@@ -334,7 +385,7 @@ struct QuizView: View {
                                 }
                             }
                             .padding()
-                            .background(Color(.systemGray6))
+                            .background(Color.cardBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .padding(.horizontal)
                         }
@@ -343,6 +394,15 @@ struct QuizView: View {
                 .padding()
                 .padding(.bottom, 16)
             }
+
+            // Rating prompt: after an all-correct quiz, once per version (RatingRule)
+            Color.clear.frame(height: 0)
+                .task(id: viewModel.quizResult?.score.correct) {
+                    guard let score = viewModel.quizResult?.score,
+                          RatingRule.shouldAskAfterQuiz(correct: score.correct, total: score.total) else { return }
+                    try? await Task.sleep(for: .seconds(2))   // let the happy sheep show first
+                    requestReview()
+                }
 
             // Done button — pinned to bottom, outside scroll
             if viewModel.quizResult != nil {

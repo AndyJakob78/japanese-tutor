@@ -45,6 +45,17 @@ const SHARED = /^\/(?:config|device)(?:\/|$)/;
  * @param {(userId, lang, opts) => Promise<object>} deps.generateArticle  runs the pipeline, returns its output
  * @param {{check: Function, increment: Function, limit: number}} deps.trial  shared trial / Pro check
  */
+/** "pending" while a quiz made in the background is on its way (app 1.7 waits), "failed" if it never came. */
+function quizStatus(a, count) {
+  if (count > 0) return 'ready';
+  if (a.quiz_failed) return 'failed';
+  if (a.quiz_pending) {
+    const age = Date.now() - Date.parse(a.quiz_started_at || 0);
+    return age > 5 * 60 * 1000 ? 'failed' : 'pending'; // a restart lost it
+  }
+  return 'ready';
+}
+
 function createMiddleware({ storeFor, generateArticle, trial, settings, progress, speech = require('./speech'), practice = require('./practice') }) {
   const router = express.Router();
   // the learner's stored settings of one language ({} without a settings store, e.g. in old tests)
@@ -56,7 +67,7 @@ function createMiddleware({ storeFor, generateArticle, trial, settings, progress
     try {
       const status = await trial.check(req.userId);
       if (!status.allowed) {
-        return res.status(403).json({ error: 'TRIAL_EXHAUSTED', message: `You have used your ${trial.limit} free articles. Please upgrade to Pro to continue generating.`, generation_count: status.generationCount, limit: trial.limit });
+        return res.status(403).json({ error: 'TRIAL_EXHAUSTED', message: `You have used your ${status.limit || trial.limit} free articles. Please upgrade to Pro to continue generating.`, generation_count: status.generationCount, limit: status.limit || trial.limit });
       }
       const level = req.body && req.body.level;
       if (level && !LEVELS.includes(level)) return res.status(400).json({ error: `Unknown level: ${level}`, levels: LEVELS });
@@ -236,15 +247,25 @@ function createMiddleware({ storeFor, generateArticle, trial, settings, progress
     try {
       const status = await trial.check(req.userId);
       if (!status.allowed) {
-        return res.status(403).json({ error: 'TRIAL_EXHAUSTED', message: `You have used your ${trial.limit} free articles. Please upgrade to Pro to continue generating.`, generation_count: status.generationCount, limit: trial.limit });
+        return res.status(403).json({ error: 'TRIAL_EXHAUSTED', message: `You have used your ${status.limit || trial.limit} free articles. Please upgrade to Pro to continue generating.`, generation_count: status.generationCount, limit: status.limit || trial.limit });
       }
       const b = req.body || {};
       if (b.proficiency_level && !LEVELS.includes(b.proficiency_level)) return res.status(400).json({ error: `Unknown level: ${b.proficiency_level}`, levels: LEVELS });
       console.log(`[GENERATE ${req.lang}] user=${req.userId.substring(0, 8)}... level=${b.proficiency_level || '(setting)'} new=${b.new_words_per_article ?? '(setting)'} length=${b.target_word_count ?? '(setting)'}`);
-      const article = await generateArticle(req.userId, req.lang, { request: b, topic: b.custom_topic });
-      const saved = await storeFor(req.lang).saveArticle(req.userId, article);
+      // app 1.7 sends X-Quiz-Later: the article comes back as soon as it is written,
+      // the quiz is made right after (same steps) while the learner reads
+      const quizLater = req.get('X-Quiz-Later') === '1';
+      const article = await generateArticle(req.userId, req.lang, { request: b, topic: b.custom_topic, ...(quizLater ? { quizLater } : {}) });
+      const store = storeFor(req.lang);
+      const saved = await store.saveArticle(req.userId, article);
       if (!status.isPro) await trial.increment(req.userId);
       if (!res.writableEnded) res.status(201).json(shape.article(saved, await numbered(req), lookupFor(req)));
+      if (article._makeQuiz) {
+        article._makeQuiz()
+          .then(q => store.setQuiz(saved.id, req.userId, q.questions))
+          .catch(err => { console.error(`[quiz later ${req.lang}] failed: ${err.message}`); return store.setQuiz(saved.id, req.userId, [], true); })
+          .catch(err => console.error(`[quiz later ${req.lang}] could not save: ${err.message}`));
+      }
     } catch (err) { next(err); }
   });
   v2.get('/articles', async (req, res, next) => {
@@ -269,7 +290,7 @@ function createMiddleware({ storeFor, generateArticle, trial, settings, progress
     try {
       found(res, await storeFor(req.lang).getArticle(req.params.id, req.userId), a => {
         const questions = shape.quizQuestions(a);
-        res.json({ article_id: a.id, article_title: a.title, questions, total: questions.length, answered: 0, correct: 0 });
+        res.json({ article_id: a.id, article_title: a.title, questions, total: questions.length, answered: 0, correct: 0, status: quizStatus(a, questions.length) });
       });
     } catch (err) { next(err); }
   });

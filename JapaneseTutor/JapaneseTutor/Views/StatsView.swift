@@ -59,6 +59,7 @@ struct StatsDetailsView: View {
             }
         }
         .navigationTitle(L("All numbers", "くわしい数字"))
+        .kotonomeScreen()
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await viewModel.loadStats()
@@ -86,7 +87,7 @@ struct StatsDetailsView: View {
                 .foregroundStyle(streak > 0 ? .orange : .gray)
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -122,7 +123,7 @@ struct StatsDetailsView: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -155,7 +156,7 @@ struct StatsDetailsView: View {
             }
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -190,7 +191,7 @@ struct StatsDetailsView: View {
                 .foregroundStyle(Color.accentColor)
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -228,7 +229,7 @@ struct StatsDetailsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
