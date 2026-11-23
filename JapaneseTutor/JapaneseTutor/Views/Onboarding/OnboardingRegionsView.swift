@@ -31,7 +31,7 @@ struct OnboardingRegionsView: View {
                     .padding(.top, 40)
 
                 VStack(spacing: 8) {
-                    Text(L("Where do you live — and which places interest you?", "どこに住んでいますか？気になる場所は？"))
+                    Text(L("Where do you live — and which places interest you?", "どこに住んでいますか？\n気になる場所は？"))
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)

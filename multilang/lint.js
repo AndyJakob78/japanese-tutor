@@ -183,9 +183,27 @@ function syncGrammarNote(article, lang) {
   return { ...article, grammar_note: null }; // the sentence was removed — no note is better than a wrong one
 }
 
-/** The quiz must never show the [NEW] markers. */
+/**
+ * The writer sometimes marks the wrong option as correct while its own explanation names the
+ * right one (seen: "he ___ 10 games last year" marked "wins", explanation says 過去形の「won」).
+ * When the Japanese explanation quotes exactly one of the four options in 「」 and that is not
+ * the marked one, the mark moves to it. Two or more quoted options = unclear, left alone.
+ */
+function fixAnswerFromExplanation(q) {
+  const opts = q.options || [];
+  if (!Number.isInteger(q.answer_index) || opts.length < 2) return q;
+  const quoted = [...String(q.explanation_ja || '').matchAll(/「([^」]+)」/g)].map(m => m[1].trim().toLowerCase());
+  const named = opts.map((o, k) => (quoted.includes(String(o).trim().toLowerCase()) ? k : -1)).filter(k => k >= 0);
+  if (named.length === 1 && named[0] !== q.answer_index) {
+    console.log(`[quiz] answer moved to the option the explanation names: "${opts[q.answer_index]}" → "${opts[named[0]]}"`);
+    return { ...q, answer_index: named[0] };
+  }
+  return q;
+}
+
+/** The quiz must never show the [NEW] markers; a marked answer that its explanation contradicts is fixed. */
 function cleanQuiz(quiz) {
-  const qs = ((quiz && quiz.questions) || []).map(q => ({
+  const qs = ((quiz && quiz.questions) || []).map(q => fixAnswerFromExplanation({
     ...q,
     question: stripMarkers(q.question),
     options: (q.options || []).map(o => stripMarkers(o)),

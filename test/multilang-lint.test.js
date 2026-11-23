@@ -138,3 +138,17 @@ test('the pipeline files load (a syntax error once slipped through because no te
   assert.strictEqual(typeof g.generate, 'function');
   assert.deepStrictEqual(Object.keys(g.LANGS), ['de', 'en']);
 });
+
+test('quiz: a marked answer that its own explanation contradicts is moved (article 25, Nov 2026)', () => {
+  const bug = { type: 'grammar', instruction_ja: '空所に入る最も適切なものを選んでください。', question: 'Last year in Japan, he ____ 10 games and lost 10.',
+    options: ['wins', 'will win', 'won', 'winning'], answer_index: 0, explanation_ja: '「Last year」は過去を表すので、過去形の「won」を使います。' };
+  assert.strictEqual(cleanQuiz({ questions: [bug] }).questions[0].answer_index, 2);
+  // the explanation names the marked answer: unchanged
+  assert.strictEqual(cleanQuiz({ questions: [{ ...bug, answer_index: 2 }] }).questions[0].answer_index, 2);
+  // two options quoted (e.g. "not 「wins」 but 「won」"): unclear, left alone
+  const two = { ...bug, explanation_ja: '「wins」ではなく、過去形の「won」を使います。' };
+  assert.strictEqual(cleanQuiz({ questions: [two] }).questions[0].answer_index, 0);
+  // no option quoted (only a sentence from the article): unchanged
+  const none = { ...bug, explanation_ja: '記事に「He won 10 games.」とあります。' };
+  assert.strictEqual(cleanQuiz({ questions: [none] }).questions[0].answer_index, 0);
+});

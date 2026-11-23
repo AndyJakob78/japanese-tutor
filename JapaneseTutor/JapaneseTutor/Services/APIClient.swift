@@ -246,8 +246,43 @@ class APIClient {
 
     /// Everything the progress screen shows: level, time to the next one, next step, streak, goals, badges
     func fetchProgress() async throws -> LearningProgress {
+        #if DEBUG
+        // store screenshots only: a herd that is under way (-previewHerd YES). Never in release builds.
+        if UserDefaults.standard.bool(forKey: "previewHerd") {
+            let request = makeRequest("/progress")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            try validateResponse(response)
+            return try decoder.decode(LearningProgress.self, from: Self.herdPreview(data))
+        }
+        #endif
         return try await get("/progress")
     }
+
+    #if DEBUG
+    private static func herdPreview(_ data: Data) -> Data {
+        guard var d = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return data }
+        let reached = ["articles": 31, "typed": 130, "streak": 27]
+        if var t = d["totals"] as? [String: Any] { t["articles_read"] = 31; t["typed_right"] = 130; d["totals"] = t }
+        if var s = d["streak"] as? [String: Any] { s["current"] = 27; s["best"] = max(27, s["best"] as? Int ?? 0); d["streak"] = s }
+        if let goals = d["goals"] as? [[String: Any]] {
+            d["goals"] = goals.map { g -> [String: Any] in
+                var g = g; let target = g["target"] as? Int ?? 0
+                g["done"] = max(g["done"] as? Int ?? 0, target * 2 / 3); return g
+            }
+        }
+        if let badges = d["badges"] as? [[String: Any]] {
+            d["badges"] = badges.map { b -> [String: Any] in
+                var b = b
+                if let group = b["group"] as? String, let have = reached[group],
+                   let target = Int("\(b["value"] ?? "")"), target <= have, b["earned_at"] == nil || b["earned_at"] is NSNull {
+                    b["earned_at"] = "2026-11-20"
+                }
+                return b
+            }
+        }
+        return (try? JSONSerialization.data(withJSONObject: d)) ?? data
+    }
+    #endif
 
     // MARK: - Device / Paywall
 

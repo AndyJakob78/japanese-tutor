@@ -91,9 +91,9 @@ class OnboardingViewModel {
     }
 
     func addCustomTopic() {
-        let trimmed = customTopicInput.trimmingCharacters(in: .whitespaces).lowercased()
+        let trimmed = customTopicInput.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty,
-              !selectedTopics.contains(trimmed),
+              !selectedTopics.contains(where: { $0.lowercased() == trimmed.lowercased() }),
               selectedTopics.count < 8 else { return }
         selectedTopics.insert(trimmed)
         customTopicInput = ""
@@ -111,9 +111,9 @@ class OnboardingViewModel {
     }
 
     func addCustomRegion() {
-        let trimmed = customRegionInput.trimmingCharacters(in: .whitespaces).lowercased()
+        let trimmed = customRegionInput.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty,
-              !selectedRegions.contains(trimmed),
+              !selectedRegions.contains(where: { $0.lowercased() == trimmed.lowercased() }),
               selectedRegions.count < 10 else { return }
         selectedRegions.insert(trimmed)
         customRegionInput = ""
@@ -424,7 +424,7 @@ struct CelebrationView: View {
 struct ChipGridView: View {
     let items: [String]
     /// How an item is shown (topics and regions get Japanese names on the German / English screens)
-    var label: (String) -> String = { $0.capitalized }
+    var label: (String) -> String = Labels.asTyped
     let isSelected: (String) -> Bool
     let isDisabled: (String) -> Bool
     let onTap: (String) -> Void

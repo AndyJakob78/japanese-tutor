@@ -46,9 +46,9 @@ class ConfigViewModel {
     // MARK: - Topics
 
     func addTopic(_ topic: String) {
-        let trimmed = topic.trimmingCharacters(in: .whitespaces).lowercased()
+        let trimmed = topic.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty,
-              !config.topics.contains(trimmed),
+              !config.topics.contains(where: { $0.lowercased() == trimmed.lowercased() }),
               config.topics.count < 10 else { return }
         config.topics.append(trimmed)
     }
@@ -58,20 +58,20 @@ class ConfigViewModel {
     }
 
     func updateTopic(at index: Int, with newValue: String) {
-        let trimmed = newValue.trimmingCharacters(in: .whitespaces).lowercased()
+        let trimmed = newValue.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty,
               index < config.topics.count else { return }
         // Don't allow duplicates
-        if config.topics.enumerated().contains(where: { $0.offset != index && $0.element == trimmed }) { return }
+        if config.topics.enumerated().contains(where: { $0.offset != index && $0.element.lowercased() == trimmed.lowercased() }) { return }
         config.topics[index] = trimmed
     }
 
     // MARK: - Regions
 
     func addRegion(_ region: String) {
-        let trimmed = region.trimmingCharacters(in: .whitespaces).lowercased()
+        let trimmed = region.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty,
-              !config.regions.contains(trimmed),
+              !config.regions.contains(where: { $0.lowercased() == trimmed.lowercased() }),
               config.regions.count < 10 else { return }
         config.regions.append(trimmed)
     }
@@ -81,10 +81,10 @@ class ConfigViewModel {
     }
 
     func updateRegion(at index: Int, with newValue: String) {
-        let trimmed = newValue.trimmingCharacters(in: .whitespaces).lowercased()
+        let trimmed = newValue.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty,
               index < config.regions.count else { return }
-        if config.regions.enumerated().contains(where: { $0.offset != index && $0.element == trimmed }) { return }
+        if config.regions.enumerated().contains(where: { $0.offset != index && $0.element.lowercased() == trimmed.lowercased() }) { return }
         config.regions[index] = trimmed
     }
 }
@@ -349,7 +349,7 @@ struct ConfigView: View {
 private struct EditableListRow: View {
     let value: String
     /// How the stored value is shown (topics and regions get Japanese names on the German / English screens)
-    var display: (String) -> String = { $0.capitalized }
+    var display: (String) -> String = Labels.asTyped
     let onSave: (String) -> Void
 
     @State private var isEditing = false

@@ -116,12 +116,18 @@ enum Labels {
     /// "cooking and home recipes" → "Cooking and home recipes"
     private static func firstUpper(_ s: String) -> String { s.prefix(1).uppercased() + s.dropFirst() }
 
+    /// A value the learner typed with capitals ("MLB", "New York") is shown exactly so;
+    /// an all-lowercase one (older data, chip keys) gets capitals as before.
+    static func asTyped(_ s: String) -> String { s == s.lowercased() ? s.capitalized : s }
+
     static func topic(_ key: String) -> String {
-        LearningLanguage.current.isJapanese ? key.capitalized : (topics[key.lowercased()] ?? firstUpper(key))
+        if LearningLanguage.current.isJapanese { return asTyped(key) }
+        return topics[key.lowercased()] ?? (key == key.lowercased() ? firstUpper(key) : key)
     }
 
     static func region(_ key: String) -> String {
-        LearningLanguage.current.isJapanese ? key.capitalized : (regions[key.lowercased()] ?? key.capitalized)
+        if LearningLanguage.current.isJapanese { return asTyped(key) }
+        return regions[key.lowercased()] ?? asTyped(key)
     }
 }
 

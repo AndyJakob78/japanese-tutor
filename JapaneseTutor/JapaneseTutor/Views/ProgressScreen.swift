@@ -66,7 +66,7 @@ struct StatsView: View {
                             Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                         }
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.accentColor)
                         .padding(.vertical, 6)
                     }
                 }
@@ -498,7 +498,7 @@ struct StatsView: View {
             if let next = locked.first { nextFriend(next) }
             // the herd: friends you have, then the ones still waiting (with how far you are)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 14) {
+                HStack(alignment: .top, spacing: 8) {
                     ForEach(Array(earned.enumerated()), id: \.element.id) { i, item in
                         friend(item, pose: Self.friendPoses[i % Self.friendPoses.count])
                     }
