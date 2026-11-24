@@ -1,0 +1,14 @@
+# What `gcloud run deploy --source .` must NOT upload. The server needs only
+# server/, agent/, multilang/, skills/, database/, package*.json, Dockerfile.
+#!include:.gitignore
+.git
+.gitignore
+.gcloudignore
+AppStoreAssets/
+JapaneseTutor/
+ios/
+docs/
+scripts/timing/
+test/
+*.md
+!skills/**/*.md
