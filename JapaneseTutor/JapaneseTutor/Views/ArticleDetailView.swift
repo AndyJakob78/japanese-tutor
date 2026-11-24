@@ -77,9 +77,9 @@ struct ArticleDetailView: View {
                             Image(systemName: "brain.head.profile")
                                 .font(.title2)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(L("Test Your Knowledge", "クイズに挑戦"))
+                                Text(L("Take the Quiz", "クイズに挑戦"))
                                     .font(.headline)
-                                Text(L("Take the vocabulary quiz for this article", "この記事の内容と単語を確認しましょう"))
+                                Text(L("Check this article's content and words", "この記事の内容と単語を確認しましょう"))
                                     .font(.caption)
                                     .opacity(0.85)
                             }
@@ -138,7 +138,7 @@ struct ArticleDetailView: View {
                     }
 
                 }
-                .padding()
+                .padding(16)   // fixed: the default padding shrank when the player opened and the text re-wrapped
             } else if let error = viewModel.errorMessage {
                 Text(L("Error: \(error)", "エラー: \(error)"))
                     .foregroundStyle(.red)
@@ -155,8 +155,8 @@ struct ArticleDetailView: View {
                 HStack(spacing: 14) {
                     // Listen — on-device Japanese voice
                     Button {
-                        if speaker.isPlaying {
-                            speaker.playPause()          // the same button pauses while it reads
+                        if showAudio {
+                            speaker.stop(); showAudio = false   // one Pause only: it lives in the player
                         } else if let article = viewModel.article, let body = article.bodyRomaji {
                             showAudio = true
                             Task {
@@ -166,10 +166,10 @@ struct ArticleDetailView: View {
                         }
                     } label: {
                         // a speaker = "read this aloud" (headphones suggested "put headphones on")
-                        ArticleToolIcon(symbol: speaker.isPlaying ? "pause.fill" : "speaker.wave.2.fill",
-                                        label: speaker.isPlaying ? L("Pause", "一時停止") : L("Listen", "聞く"))
+                        ArticleToolIcon(symbol: showAudio ? "speaker.slash.fill" : "speaker.wave.2.fill",   // still a speaker, so "Close" reads as the player
+                                        label: showAudio ? L("Close", "閉じる") : L("Listen", "聞く"))
                     }
-                    .accessibilityLabel(speaker.isPlaying ? L("Pause", "一時停止") : L("Listen", "読み上げ"))
+                    .accessibilityLabel(showAudio ? L("Close player", "プレーヤーを閉じる") : L("Listen", "読み上げ"))
 
                     // Quiz button — always accessible
                     NavigationLink(destination: QuizView(articleId: articleId)) {
@@ -255,7 +255,7 @@ struct ArticleDetailView: View {
                 if newCount > 0 {
                     Text(L("\(newCount) new word\(newCount == 1 ? "" : "s")", "新出\(newCount)語"))
                         .font(.caption)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.accentText)
                 }
             }
         }
@@ -571,7 +571,7 @@ struct ArticleToolIcon: View {
             Image(systemName: symbol).font(.system(size: 14, weight: .medium))
             Text(label).font(.system(size: 10, weight: .semibold)).lineLimit(1).fixedSize()
         }
-        .foregroundStyle(Color.accentColor)
+        .foregroundStyle(Color.accentText)
         .frame(minWidth: 34, minHeight: 44)
     }
 }

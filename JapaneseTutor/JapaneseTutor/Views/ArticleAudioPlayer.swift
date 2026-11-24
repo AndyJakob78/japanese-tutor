@@ -242,12 +242,11 @@ struct ArticleAudioBar: View {
                     }
                 } label: {
                     Text(speedLabel(speaker.speed)).font(.caption.weight(.semibold)).fixedSize()
+                        .foregroundStyle(Color.accentText)   // small text: the darker coral in light mode
                 }
-                Button { speaker.stop(); onClose() } label: { Image(systemName: "xmark") }
-                    .foregroundStyle(.secondary)
             }
         }
-        .padding()
-        .background(.regularMaterial)
+        .padding(16)
+        .background(Color.cardBackground)   // the app's own card colour, not a grey system sheet
     }
 }

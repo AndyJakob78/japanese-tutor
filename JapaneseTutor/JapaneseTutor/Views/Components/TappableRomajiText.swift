@@ -570,6 +570,7 @@ private struct SelectableTextView: UIViewRepresentable {
             return nil
         }
         var phrase: (word: VocabularyWord, left: Int)?
+        var phraseSpaceAttrs: [NSAttributedString.Key: Any]?
 
         for (index, word) in words.enumerated() {
             var remaining = word
@@ -591,7 +592,8 @@ private struct SelectableTextView: UIViewRepresentable {
             if remaining.isEmpty { continue }
 
             if !first {
-                result.append(NSAttributedString(string: " ", attributes: baseAttrs))
+                // inside an expression the space carries the same link and underline: one unit, not three words
+                result.append(NSAttributedString(string: " ", attributes: phraseSpaceAttrs ?? baseAttrs))
             }
             first = false
 
@@ -652,6 +654,7 @@ private struct SelectableTextView: UIViewRepresentable {
             }
             result.append(NSAttributedString(string: core, attributes: attrs))
             if !tail.isEmpty { result.append(NSAttributedString(string: tail, attributes: baseAttrs)) }
+            phraseSpaceAttrs = (phrase != nil && tail.isEmpty) ? attrs : nil
             nextIsNew = false
         }
 

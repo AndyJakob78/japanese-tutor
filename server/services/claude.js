@@ -126,6 +126,10 @@ async function callClaude(systemPrompt, userPrompt, options = {}) {
  */
 async function callClaudeWithSearch(systemPrompt, userPrompt, options = {}) {
   const messages = [{ role: 'user', content: userPrompt }];
+  // Tests only (scripts/timing/search-compare.js): try the search step on another model.
+  // Production uses MODEL; nothing sets these variables on the server.
+  const testModel = process.env.SEARCH_MODEL;
+  const usage = { input: 0, output: 0, cache_read: 0, cache_write: 0, searches: 0, turns: 0 };
 
   // Loop to handle pause_turn (Claude may need multiple turns for web search)
   let maxIterations = 10;
@@ -133,9 +137,10 @@ async function callClaudeWithSearch(systemPrompt, userPrompt, options = {}) {
     const response = await withRetry(async () => {
       return await client.beta.messages.create({
         ...baseParams(systemPrompt, options),
+        ...(testModel ? { model: testModel } : {}),
         tools: [
           {
-            type: 'web_search_20260209',
+            type: process.env.SEARCH_TOOL || 'web_search_20260209',
             name: 'web_search',
             max_uses: options.max_searches || 5,
           }
@@ -144,6 +149,13 @@ async function callClaudeWithSearch(systemPrompt, userPrompt, options = {}) {
       });
     });
     assertNotRefused(response);
+    if (process.env.DEBUG_USAGE && response.usage) {
+      const u = response.usage;
+      usage.input += u.input_tokens || 0; usage.output += u.output_tokens || 0;
+      usage.cache_read += u.cache_read_input_tokens || 0; usage.cache_write += u.cache_creation_input_tokens || 0;
+      usage.searches += (u.server_tool_use && u.server_tool_use.web_search_requests) || 0; usage.turns++;
+      if (response.stop_reason !== 'pause_turn') console.log('SEARCH_USAGE', JSON.stringify({ ...usage, model: response.model }));
+    }
 
     // If Claude is done (end_turn or max_tokens), extract final text
     if (response.stop_reason === 'end_turn' || response.stop_reason === 'max_tokens') {
