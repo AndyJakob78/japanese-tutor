@@ -145,15 +145,19 @@ struct ArticleDetailView: View {
                     .padding()
             }
         }
-        .navigationTitle(L("Article", "記事"))
+        .navigationTitle("")
         .kotonomeScreen()
         .navigationBarTitleDisplayMode(.inline)
+        // reading is a screen of its own: the tab bar covered the quiz card (design review, 2026-11-24)
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 12) {
+                HStack(spacing: 14) {
                     // Listen — on-device Japanese voice
                     Button {
-                        if let article = viewModel.article, let body = article.bodyRomaji {
+                        if speaker.isPlaying {
+                            speaker.playPause()          // the same button pauses while it reads
+                        } else if let article = viewModel.article, let body = article.bodyRomaji {
                             showAudio = true
                             Task {
                                 await speaker.load(articleId: article.id, body: body)
@@ -161,13 +165,15 @@ struct ArticleDetailView: View {
                             }
                         }
                     } label: {
-                        SheepToolbarIcon(name: "SheepListen")
+                        // a speaker = "read this aloud" (headphones suggested "put headphones on")
+                        ArticleToolIcon(symbol: speaker.isPlaying ? "pause.fill" : "speaker.wave.2.fill",
+                                        label: speaker.isPlaying ? L("Pause", "一時停止") : L("Listen", "聞く"))
                     }
-                    .accessibilityLabel(L("Listen", "読み上げ"))
+                    .accessibilityLabel(speaker.isPlaying ? L("Pause", "一時停止") : L("Listen", "読み上げ"))
 
                     // Quiz button — always accessible
                     NavigationLink(destination: QuizView(articleId: articleId)) {
-                        SheepToolbarIcon(name: "SheepQuiz")
+                        ArticleToolIcon(symbol: "checklist", label: L("Quiz", "クイズ"))
                     }
                     .accessibilityLabel(L("Quiz", "クイズ"))
 
@@ -175,7 +181,7 @@ struct ArticleDetailView: View {
                     Button {
                         viewModel.showWordLookup = true
                     } label: {
-                        SheepToolbarIcon(name: "SheepWords")
+                        ArticleToolIcon(symbol: "character.book.closed", label: L("Words", "単語"))
                     }
                     .accessibilityLabel(L("Words in this article", "この記事の単語"))
 
@@ -191,7 +197,7 @@ struct ArticleDetailView: View {
                             Label(L("Default Size", "標準の大きさ"), systemImage: "arrow.counterclockwise")
                         }
                     } label: {
-                        SheepToolbarIcon(name: "SheepTextSize")
+                        ArticleToolIcon(symbol: "textformat.size", label: L("Size", "文字"))
                     }
                     .accessibilityLabel(L("Text size", "文字の大きさ"))
                 }
@@ -244,10 +250,12 @@ struct ArticleDetailView: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                if let count = article.newWordCount, count > 0 {
-                    Text(L("\(count) new words", "新出\(count)語"))
+                // the words really marked new in this article (the stored count was the requested number)
+                let newCount = article.vocabulary?.filter { $0.isNew?.value == true }.count ?? article.newWordCount ?? 0
+                if newCount > 0 {
+                    Text(L("\(newCount) new word\(newCount == 1 ? "" : "s")", "新出\(newCount)語"))
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.accentColor)
                 }
             }
         }
@@ -553,6 +561,21 @@ struct WordLookupSheet: View {
 
 
 /// Toolbar button image: the felt sheep holding the tool (headphones, pencil, book, letter A).
+/// Article tools: a plain symbol with a one-word label. (1.7 first used sheep heads here —
+/// cute, but nobody could tell what they did; owner, 2026-11-24.)
+struct ArticleToolIcon: View {
+    let symbol: String
+    let label: String
+    var body: some View {
+        VStack(spacing: 2) {
+            Image(systemName: symbol).font(.system(size: 14, weight: .medium))
+            Text(label).font(.system(size: 10, weight: .semibold)).lineLimit(1).fixedSize()
+        }
+        .foregroundStyle(Color.accentColor)
+        .frame(minWidth: 34, minHeight: 44)
+    }
+}
+
 struct SheepToolbarIcon: View {
     let name: String
     var body: some View {

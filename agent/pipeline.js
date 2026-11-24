@@ -2063,7 +2063,8 @@ async function saveToDatabase(articleId, articleData, newsData, quiz, userId, co
     region: newsData.region,
     category: newsData.category || null,
     word_count: articleData.word_count || 0,
-    new_word_count: articleData.new_word_count || 0,
+    // the words really taught (the writer's own number was the requested count, not what survived review)
+    new_word_count: Array.isArray(articleData.newWords) ? articleData.newWords.length : (articleData.new_word_count || 0),
     review_word_count: articleData.reviewWords?.length || 0,
     difficulty_score: null,
     writing_system: config.writing_system || 'romaji',

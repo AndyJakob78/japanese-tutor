@@ -220,7 +220,7 @@ struct ArticleFeedView: View {
 
             // Full "writing your article" screen while generating
             if viewModel.isGenerating && !viewModel.generatingMinimized {
-                GeneratingView(startedAt: viewModel.generationStartedAt ?? Date()) {
+                GeneratingView(startedAt: viewModel.generationStartedAt ?? Date(), canMinimize: !viewModel.articles.isEmpty) {
                     withAnimation { viewModel.generatingMinimized = true }
                 }
                 .transition(.opacity)

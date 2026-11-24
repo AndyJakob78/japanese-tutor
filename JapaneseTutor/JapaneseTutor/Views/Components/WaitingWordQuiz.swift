@@ -105,12 +105,22 @@ struct WaitingWordQuiz: View {
     private func load() async {
         guard items.isEmpty else { return }
         var bank: [Item] = []
+        // The word is shown in the script the learner reads in (Settings): romaji readers see
+        // romaji only — kanji under it was a script they did not choose (design review, 2026-11-24).
+        async let configCall = try? APIClient.shared.fetchConfig()
         if let words = try? await APIClient.shared.fetchVocabulary(status: "learning", limit: 120).vocabulary {
-            let isJa = LearningLanguage.current.isJapanese
+            let script = LearningLanguage.current.isJapanese ? ((await configCall)?.writingSystem ?? "romaji") : "romaji"
+            func shown(_ w: VocabularyWord) -> (String, String?) {
+                switch script {
+                case "kana": return (w.wordKana ?? w.wordRomajiMacron, nil)
+                case "kanji": return (w.wordKanji ?? w.wordKana ?? w.wordRomajiMacron, w.wordKanji == nil ? nil : w.wordKana)
+                default: return (w.wordRomajiMacron, nil)
+                }
+            }
             bank = words
                 .sorted { ($0.timesTested ?? 0) < ($1.timesTested ?? 0) }   // least practised first
                 .prefix(30)
-                .map { Item(id: $0.id, word: $0.wordRomajiMacron, sub: isJa ? $0.wordKanji : nil,
+                .map { Item(id: $0.id, word: shown($0).0, sub: shown($0).1,
                             meaning: VocabQuizViewModel.firstSense($0.meaningEn)) }
                 .shuffled()
         }

@@ -19,6 +19,8 @@ private var generationSteps: [(start: TimeInterval, title: String, icon: String)
 
 struct GeneratingView: View {
     let startedAt: Date
+    /// false for the very first article: there is nothing else to read yet
+    var canMinimize = true
     var onMinimize: () -> Void
 
     var body: some View {
@@ -31,9 +33,10 @@ struct GeneratingView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L("Writing your article", "記事を作成しています"))
                             .font(.title3.weight(.bold))
-                        Text(L("This usually takes 1–3 minutes.", "通常1〜3分かかります。"))
+                        Text(L("Usually 1–2 minutes.", "通常1〜2分かかります。"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)
                 }
@@ -71,22 +74,26 @@ struct GeneratingView: View {
                 // word check sits low, just above the button (owner's layout, 2026-11-23)
                 WaitingWordQuiz()
 
+                if canMinimize {
                 Button {
                     onMinimize()
                 } label: {
+                    // a quiet way out, not the main action of this screen
                     Text(L("Read other articles meanwhile", "その間にほかの記事を読む"))
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.plain)
+                }
             }
             .padding(24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.appBackground.ignoresSafeArea())
+        // a full screen of its own: no tab bar under it (it covered the button, owner 2026-11-24)
+        .toolbar(.hidden, for: .tabBar)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     private enum StepState { case done, active, waiting }

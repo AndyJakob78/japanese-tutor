@@ -2,6 +2,7 @@
 
 ## ⚡ Read these first (operational context)
 - **[KNOWLEDGE_HUB.md](KNOWLEDGE_HUB.md)** — architecture, production environment, pipeline post-processing chain, known Claude hallucinations log, common operational tasks, things to never do without asking. **Start here when picking up work or debugging.**
+- **[IDEAS.md](IDEAS.md)** — idea list with priorities (P0 = next). Local only.
 - **[DEPLOY.md](DEPLOY.md)** — exact deploy command, smoke test, rollback procedure. **Read before deploying.**
 
 ## Project Overview

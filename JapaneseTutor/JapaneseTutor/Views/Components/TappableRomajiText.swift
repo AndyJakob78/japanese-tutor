@@ -554,7 +554,24 @@ private struct SelectableTextView: UIViewRepresentable {
         var nextIsNew = false
         var first = true
 
-        for word in words {
+        // A new word can be an expression of several words ("ma ni au"). The whole expression is
+        // one link in one style — before, only its first word was coloured and nothing was tappable.
+        func plain(_ token: String) -> String {
+            let t = token.replacingOccurrences(of: "[NEW]", with: "").replacingOccurrences(of: "[REVIEW]", with: "")
+                .trimmingCharacters(in: .punctuationCharacters)
+            return (writingSystem == "kanji" ? stripFurigana(t) : t).lowercased()
+        }
+        func phraseMatch(at index: Int) -> (word: VocabularyWord, length: Int)? {
+            guard writingSystem != "kanji", writingSystem != "kana" else { return nil }   // those scripts have no spaces inside a word
+            for length in stride(from: 4, through: 2, by: -1) where index + length <= words.count {
+                let joined = words[index..<(index + length)].map(plain).joined(separator: " ")
+                if let m = vocabLookup[joined] ?? vocabLookup[stripMacrons(joined)] { return (m, length) }
+            }
+            return nil
+        }
+        var phrase: (word: VocabularyWord, left: Int)?
+
+        for (index, word) in words.enumerated() {
             var remaining = word
 
             // Strip leading markers
@@ -586,11 +603,17 @@ private struct SelectableTextView: UIViewRepresentable {
                 cleaned = remaining.trimmingCharacters(in: .punctuationCharacters)
             }
 
-            // Highlight if marked [NEW] and not a common particle/word
-            let shouldHighlight = nextIsNew && !isCommonWord(cleaned, writingSystem: writingSystem)
+            // Flexible vocabulary lookup for tap-to-translate; an expression takes all its words
+            if phrase == nil, let found = phraseMatch(at: index) { phrase = (found.word, found.length) }
+            let inPhrase = phrase != nil
+            let vocabMatch = phrase?.word ?? findVocabMatch(cleaned, in: vocabLookup, writingSystem: writingSystem)
+            if let p = phrase { phrase = p.left > 1 ? (p.word, p.left - 1) : nil }
 
-            // Flexible vocabulary lookup for tap-to-translate
-            let vocabMatch = findVocabMatch(cleaned, in: vocabLookup, writingSystem: writingSystem)
+            // Two styles only: a NEW word of this article is coloured at every occurrence (not just
+            // where the marker stands); a known word is underlined. Common particles stay plain.
+            let isNewWord = vocabMatch?.isNew?.value == true
+            let shouldHighlight = inPhrase ? (isNewWord || nextIsNew)
+                : ((nextIsNew || isNewWord) && !isCommonWord(cleaned, writingSystem: writingSystem))
 
             var attrs = baseAttrs
             if shouldHighlight {
@@ -619,7 +642,16 @@ private struct SelectableTextView: UIViewRepresentable {
                 }
             }
 
-            result.append(NSAttributedString(string: remaining, attributes: attrs))
+            // The full stop, comma or closing quote after a word is not part of the word:
+            // it stays plain ("pitcher." was coloured and underlined including the dot).
+            let closers = CharacterSet(charactersIn: ".,!?;:'\"’”。、！？")
+            var core = remaining
+            var tail = ""
+            while let last = core.unicodeScalars.last, closers.contains(last), core.count > 1 {
+                tail = String(core.removeLast()) + tail
+            }
+            result.append(NSAttributedString(string: core, attributes: attrs))
+            if !tail.isEmpty { result.append(NSAttributedString(string: tail, attributes: baseAttrs)) }
             nextIsNew = false
         }
 
