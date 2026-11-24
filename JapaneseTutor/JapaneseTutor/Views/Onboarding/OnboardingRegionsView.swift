@@ -7,6 +7,9 @@ struct OnboardingRegionsView: View {
     @State private var locating = false
     @State private var locationFailed = false
 
+    /// The own-entry field: when it gets the keyboard, it is scrolled into view above it
+    @FocusState private var fieldFocused: Bool
+
     /// The phone's time zone city and country first, then the course's usual places.
     private var suggestions: [String] {
         var out: [String] = []
@@ -25,6 +28,7 @@ struct OnboardingRegionsView: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(spacing: 24) {
                 onboardingHeroSheep("ChapterLost")
@@ -121,6 +125,8 @@ struct OnboardingRegionsView: View {
                             .background(Color.cardBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .onSubmit { vm.addCustomRegion() }
+                            .focused($fieldFocused)
+                            .id("ownEntry")
 
                         Button {
                             UIApplication.shared.sendAction(
@@ -154,6 +160,14 @@ struct OnboardingRegionsView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .defaultScrollAnchor(.bottom)
+        .onChange(of: fieldFocused) { _, on in
+            guard on else { return }
+            // wait for the keyboard to finish rising, then show the field just above it
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("ownEntry", anchor: .bottom) }
+            }
+        }
+        }
     }
 }
 

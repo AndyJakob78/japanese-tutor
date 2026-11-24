@@ -10,7 +10,7 @@ test('a new device may redeem a friend\'s code', () => assert.equal(redeemError(
 test('unknown code', () => assert.equal(redeemError({ ...ok, codeOwner: null }), 'CODE_NOT_FOUND'));
 test('own code', () => assert.equal(redeemError({ ...ok, codeOwner: 'B' }), 'OWN_CODE'));
 test('only once per device', () => assert.equal(redeemError({ ...ok, alreadyRedeemed: true }), 'ALREADY_REDEEMED'));
-test('only new devices', () => assert.equal(redeemError({ ...ok, deviceHasArticles: true }), 'NOT_NEW_DEVICE'));
+test('a device that already read its free articles may redeem (code asked on the paywall)', () => assert.equal(redeemError({ ...ok, deviceHasArticles: true }), null));
 test('inviter cap', () => {
   assert.equal(redeemError({ ...ok, inviterCount: REFERRAL_CAP - 1 }), null);
   assert.equal(redeemError({ ...ok, inviterCount: REFERRAL_CAP }), 'INVITER_CAP_REACHED');

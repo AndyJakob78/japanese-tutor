@@ -36,7 +36,8 @@ function redeemError({ codeOwner, deviceId, alreadyRedeemed, deviceHasArticles, 
   if (!codeOwner) return 'CODE_NOT_FOUND';
   if (codeOwner === deviceId) return 'OWN_CODE';
   if (alreadyRedeemed) return 'ALREADY_REDEEMED';
-  if (deviceHasArticles) return 'NOT_NEW_DEVICE';
+  // 2026-11-24: codes are asked when the free articles run out, so a device with articles may
+  // redeem too. One code per device, ever (alreadyRedeemed) — the device ID survives reinstalls.
   if (inviterCount >= REFERRAL_CAP) return 'INVITER_CAP_REACHED';
   return null;
 }

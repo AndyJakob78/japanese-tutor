@@ -7,8 +7,9 @@ import AdServices
 class OnboardingViewModel {
     // Step tracking
     var currentStep: Int = 0
-    /// Topics, places, level, (writing system — Japanese only), almost done (where heard, invite code).
-    let totalSteps = LearningLanguage.current.isJapanese ? 5 : 4
+    /// Topics, places, level, (writing system — Japanese only). The invite code is asked on the
+    /// paywall once the free articles are used up (owner, 2026-11-24), not during setup.
+    let totalSteps = LearningLanguage.current.isJapanese ? 4 : 3
 
     enum Step { case topics, places, level, writing, finish }
     var step: Step {
@@ -16,8 +17,7 @@ class OnboardingViewModel {
         case 0: return .topics
         case 1: return .places
         case 2: return .level
-        case 3: return LearningLanguage.current.isJapanese ? .writing : .finish
-        default: return .finish
+        default: return .writing
         }
     }
 
@@ -183,6 +183,8 @@ class OnboardingViewModel {
 
 struct OnboardingFlowView: View {
     @State private var vm = OnboardingViewModel()
+    /// While the keyboard is up, the Continue / Skip bar steps aside so the typed text stays visible
+    @State private var keyboardUp = false
     var onComplete: () -> Void
 
     var body: some View {
@@ -195,12 +197,6 @@ struct OnboardingFlowView: View {
                 // Step content — slides in from the right on each advance
                 Group {
                     switch vm.currentStep {
-                    case _ where vm.step == .finish:
-                        OnboardingFinishView(vm: vm)
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing),
-                                removal:   .move(edge: .leading)
-                            ))
                     case 0:
                         OnboardingTopicsView(vm: vm)
                             .transition(.asymmetric(
@@ -231,13 +227,16 @@ struct OnboardingFlowView: View {
                 }
                 .animation(.easeInOut(duration: 0.35), value: vm.currentStep)
 
-                // Fixed bottom chrome (always above content)
-                bottomChrome
+                // Fixed bottom chrome (always above content; hidden while typing)
+                if !keyboardUp { bottomChrome }
             }
         }
         .animation(.easeInOut(duration: 0.4), value: vm.showCompletion)
-        .ignoresSafeArea(edges: .bottom)
+        // only the container edge: ignoring the keyboard too kept the screen still while the keyboard covered the own-topic field
+        .ignoresSafeArea(.container, edges: .bottom)
         .background(Color.appBackground.ignoresSafeArea())
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }
         .onChange(of: vm.isReadyToFinish) { _, ready in
             if ready { onComplete() }
         }
@@ -339,21 +338,15 @@ struct OnboardingFlowView: View {
         vm.isSaving = true
         do {
             try await APIClient.shared.updateConfig(vm.buildConfigPayload())
-            // Invite code: a wrong code keeps the learner here to fix or clear it
-            let code = vm.inviteCode.trimmingCharacters(in: .whitespaces)
-            if !code.isEmpty, let problem = try await APIClient.shared.redeemInvite(code: code) {
-                await MainActor.run {
-                    vm.saveError = OnboardingFinishView.message(for: problem)
-                    vm.isSaving = false
-                }
-                return
-            }
             UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
             let fields = vm.attributionFields()
             Task.detached { await APIClient.shared.sendAttribution(fields) }
             await MainActor.run {
                 vm.isSaving = false
-                vm.showCompletion = true
+                // straight into the app: the article list starts the first article with the
+                // sheep waiting screen and the word check (instead of a plain spinner here)
+                TabRouter.shared.generateFirstArticle = true
+                vm.isReadyToFinish = true
             }
         } catch {
             vm.saveError = error.localizedDescription

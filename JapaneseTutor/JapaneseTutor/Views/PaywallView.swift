@@ -14,6 +14,11 @@ struct PaywallView: View {
     @State private var isRestoring  = false
     @State private var isLoadingOfferings = true
     @State private var errorMessage: String?
+    // invite code (1.7: asked here, when the free articles are used up — not during setup)
+    @State private var inviteCode = ""
+    @State private var inviteMessage: String?
+    @State private var inviteWorked = false
+    @State private var isRedeeming = false
 
     private let rc = RevenueCatService.shared
 
@@ -30,7 +35,12 @@ struct PaywallView: View {
                     ctaSection
                         .padding(.top, 24)
                         .padding(.horizontal, 24)
-                        .padding(.bottom, 40)
+                        .padding(.bottom, trialsRemaining == 0 ? 24 : 40)
+                    if trialsRemaining == 0 {
+                        inviteSection
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 40)
+                    }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -255,6 +265,74 @@ struct PaywallView: View {
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Invite code
+
+    private var inviteSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Divider().padding(.bottom, 6)
+            Text(L("Have an invite code from a friend?", "友だちの招待コードをお持ちですか？"))
+                .font(.subheadline.weight(.semibold))
+            Text(L("You and your friend each get 1 extra free article.", "あなたと友だち、それぞれ無料の記事が1本増えます。"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                TextField(L("e.g. KT7M2P", "例: KT7M2P"), text: $inviteCode)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .font(.body.monospaced())
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .submitLabel(.done)
+                    .onSubmit { Task { await redeem() } }
+                Button {
+                    Task { await redeem() }
+                } label: {
+                    if isRedeeming { ProgressView() } else {
+                        Text(L("Use", "使う")).font(.subheadline.weight(.semibold))
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(isRedeeming || inviteWorked || inviteCode.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if let inviteMessage {
+                Text(inviteMessage)
+                    .font(.caption)
+                    .foregroundStyle(inviteWorked ? Color.green : Color.red)
+            }
+        }
+    }
+
+    private func redeem() async {
+        let code = inviteCode.trimmingCharacters(in: .whitespaces)
+        guard !code.isEmpty else { return }
+        isRedeeming = true
+        defer { isRedeeming = false }
+        do {
+            if let problem = try await APIClient.shared.redeemInvite(code: code) {
+                inviteMessage = Self.inviteProblem(problem)
+            } else {
+                inviteWorked = true
+                inviteMessage = L("Done! 1 extra free article was added.", "できました！無料の記事が1本増えました。")
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                onUpgradeSuccess()   // closes this screen and reloads the free-article count
+            }
+        } catch {
+            inviteMessage = L("The invite code could not be checked. Try again.", "招待コードを確認できませんでした。もう一度お試しください。")
+        }
+    }
+
+    static func inviteProblem(_ error: String) -> String {
+        switch error {
+        case "CODE_NOT_FOUND": return L("This invite code doesn't exist. Please check it.", "この招待コードは見つかりません。確認してください。")
+        case "OWN_CODE": return L("That's your own invite code.", "これはあなた自身の招待コードです。")
+        case "ALREADY_REDEEMED": return L("This phone already used an invite code.", "このスマホではすでに招待コードを使いました。")
+        case "INVITER_CAP_REACHED": return L("Your friend's code has been used too often.", "このコードは使用回数の上限に達しました。")
+        default: return L("The invite code could not be checked. Try again.", "招待コードを確認できませんでした。もう一度お試しください。")
         }
     }
 

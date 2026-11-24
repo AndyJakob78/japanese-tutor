@@ -3,6 +3,9 @@ import SwiftUI
 struct OnboardingTopicsView: View {
     @Bindable var vm: OnboardingViewModel
 
+    /// The own-entry field: when it gets the keyboard, it is scrolled into view above it
+    @FocusState private var fieldFocused: Bool
+
     /// Custom topics that aren't in the predefined list
     private var customTopics: [String] {
         vm.selectedTopics
@@ -11,6 +14,7 @@ struct OnboardingTopicsView: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(spacing: 24) {
                 onboardingHeroSheep("ChapterReading")
@@ -80,6 +84,8 @@ struct OnboardingTopicsView: View {
                             .background(Color.cardBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .onSubmit { vm.addCustomTopic() }
+                            .focused($fieldFocused)
+                            .id("ownEntry")
 
                         Button {
                             UIApplication.shared.sendAction(
@@ -113,6 +119,14 @@ struct OnboardingTopicsView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .defaultScrollAnchor(.bottom)
+        .onChange(of: fieldFocused) { _, on in
+            guard on else { return }
+            // wait for the keyboard to finish rising, then show the field just above it
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("ownEntry", anchor: .bottom) }
+            }
+        }
+        }
     }
 }
 

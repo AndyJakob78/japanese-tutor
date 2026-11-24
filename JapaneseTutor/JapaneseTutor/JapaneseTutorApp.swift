@@ -48,6 +48,8 @@ final class TabRouter {
     var tab = 0
     /// Set by the progress screen; the article list opens its New Article form and clears it.
     var wantsNewArticle = false
+    /// Set at the end of setup; the article list starts the first article at once.
+    var generateFirstArticle = false
 }
 
 struct ContentView: View {

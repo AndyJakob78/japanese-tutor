@@ -247,6 +247,11 @@ struct ArticleFeedView: View {
                 viewModel.isGenerating = true
             }
             #endif
+            // end of setup: the first article starts right away, with the sheep waiting screen
+            if TabRouter.shared.generateFirstArticle {
+                TabRouter.shared.generateFirstArticle = false
+                Task { await viewModel.generateArticle() }
+            }
             await viewModel.loadArticles()
             await viewModel.loadDeviceStatus()
             // Pre-load RevenueCat offerings so the upsell banner shows localized prices
