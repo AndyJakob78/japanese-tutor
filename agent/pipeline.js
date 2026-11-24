@@ -1874,6 +1874,14 @@ async function prefetchAllData(userId, overrides) {
 // =============================================
 // MAIN PIPELINE
 // =============================================
+const nextNews = require('./next-news');
+
+/** After an article: find the next story in the background (the learner's list now includes this one). */
+function prepareNextStory(userId, config, recentArticles, newsData) {
+  const justRead = { topic: newsData.topic, region: newsData.region, category: newsData.category, sources: (newsData.articles || []).map(a => ({ url: a.url })) };
+  nextNews.prepareStory(collections, userId, config, [justRead, ...recentArticles], searchNewsWithTopic);
+}
+
 async function runPipeline(overrides = {}, userId, { quizLater = false } = {}) {
   if (!userId) {
     throw new Error('userId is required for pipeline execution');
@@ -1914,8 +1922,11 @@ async function runPipeline(overrides = {}, userId, { quizLater = false } = {}) {
         console.log(`\n[Pipeline] === Retry attempt ${attempt}/${MAX_ATTEMPTS} ===`);
       }
 
-      // Call 1: Topic + News Search (web search) — uses prefetched recent articles
-      newsData = await searchNewsWithTopic(config, userId, recentArticles, excludeCategories);
+      // Call 1: Topic + News Search (web search) — uses prefetched recent articles.
+      // First attempt: a story found in the background after the last article, if it still fits.
+      const ready = attempt === 1 ? await nextNews.takeStory(collections, userId, config, recentArticles) : null;
+      if (ready) console.log(`[Step 1+2] Using the story found in the background: "${String(ready.topic || '').slice(0, 80)}"`);
+      newsData = ready || await searchNewsWithTopic(config, userId, recentArticles, excludeCategories);
 
       if (!newsData.articles || newsData.articles.length === 0) {
         throw new Error('No news articles found');
@@ -1977,6 +1988,7 @@ async function runPipeline(overrides = {}, userId, { quizLater = false } = {}) {
       const savedArticle = await saveToDatabase(articleId, articleData, newsData, { questions: [] }, userId, config);
       await collections.articles.doc(String(articleId)).update({ quiz_pending: true, quiz_started_at: new Date().toISOString() });
       console.log(`\n  Article ready (${((Date.now() - startTime) / 1000).toFixed(1)}s), id ${articleId} — quiz follows in the background\n`);
+      prepareNextStory(userId, config, recentArticles, newsData);
       generateQuiz(articleData, config, quizReviewWords)
         .then(quiz => saveQuizLater(articleId, quiz, userId))
         .then(() => console.log(`[Quiz later] article ${articleId} quiz saved (${((Date.now() - startTime) / 1000).toFixed(1)}s after start)`))
@@ -1996,6 +2008,7 @@ async function runPipeline(overrides = {}, userId, { quizLater = false } = {}) {
     // Now save everything
     const savedArticle = await saveToDatabase(articleId, articleData, newsData, quizResult, userId, config);
 
+    prepareNextStory(userId, config, recentArticles, newsData);
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`\n========================================`);
     console.log(`  Pipeline Complete (${elapsed}s)`);

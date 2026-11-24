@@ -27,6 +27,7 @@ const collections = {
   mistakes: firestore.collection('mistakes'), // Sentence-building corrections (mistake memory)
   speechCache: firestore.collection('speech_cache'), // Read-aloud MP3 per sentence (cloud voice)
   progress: firestore.collection('progress'), // Daily activity, Monday snapshots and badges per learner and language
+  nextNews: firestore.collection('next_news'), // Japanese course: the next story, found in the background after an article
 };
 
 // --- Collections for the other learning languages (German, English) ---
