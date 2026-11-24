@@ -19,6 +19,7 @@ const news = {
   for (let i = 1; i <= runs; i++) {
     const t = Date.now();
     const r = await P.generateArticleWithVocab(news, config, userId, knownWords);
+    if (process.env.SHOW) console.log("BODY:\n" + r.body_romaji + "\nEN:\n" + r.translation_en + "\nGRAMMAR: " + JSON.stringify(r.grammar_points));
     console.log(`RUN ${i}: ${((Date.now() - t) / 1000).toFixed(1)}s, words ${r.word_count}, body chars ${(r.body_romaji || '').length}, translation chars ${(r.translation_en || '').length}, grammar ${JSON.stringify(r.grammar_points || []).length} chars, newWords ${(r.newWords || []).length} (${JSON.stringify(r.newWords || []).length} chars)`);
   }
   process.exit(0);

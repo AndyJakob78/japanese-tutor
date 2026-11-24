@@ -1160,7 +1160,9 @@ Rules: ${wsPrompt.userRules}`;
   let result = await callClaudeJSON(systemPrompt, userPrompt, {
     max_tokens: 6144,
     temperature: 0.8,
-    ...(process.env.WRITER_EFFORT ? { effort: process.env.WRITER_EFFORT } : {}),   // timing tests only
+    // 2026-11-24: 'low' — steady ~22–25 s instead of 20–62 s at 'medium', same check results in tests
+    // (scripts/timing/writer-timing.js). WRITER_EFFORT env overrides it for timing tests.
+    effort: process.env.WRITER_EFFORT || 'low',
   });
 
   // Correct Claude's self-assigned JLPT tags against the authoritative
