@@ -16,8 +16,10 @@ test('changed topics, places or level: not used', () => {
   assert.equal(usable(story(), { ...config, proficiency_level: 'N3' }, [], now), false);
 });
 test('a custom topic always searches', () => assert.equal(usable(story(), { ...config, custom_topic: 'MLB' }, [], now), false));
-test('older than 12 hours: not used', () =>
-  assert.equal(usable(story({ created_at: '2026-11-23T23:00:00Z' }), config, [], now), false));
+test('older than 48 hours: not used', () =>
+  assert.equal(usable(story({ created_at: '2026-11-22T11:00:00Z' }), config, [], now), false));
+test('a 40-hour-old story is still used', () =>
+  assert.equal(usable(story({ created_at: '2026-11-22T20:00:00Z' }), config, [], now), true));
 test('a story the learner already read (same topic or same source): not used', () => {
   assert.equal(usable(story(), config, [{ topic: 'record october for visitors' }], now), false);
   assert.equal(usable(story(), config, [{ topic: 'x', sources: [{ url: 'https://example.jp/a' }] }], now), false);

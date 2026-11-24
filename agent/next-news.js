@@ -2,10 +2,10 @@
 // The news search takes 20–50 s of every article. Right after an article is saved, the server
 // already searches for the NEXT story and keeps it here (one document per learner). The next
 // article skips the search when the stored story still fits: same topics, places and level,
-// no custom topic, not older than MAX_AGE_H, and not a story the learner already read.
+// no custom topic, not older than MAX_AGE_H (48 h), and not a story the learner already read.
 // Same search, same checks — it only happens earlier, while the learner reads.
 
-const MAX_AGE_H = 12;
+const MAX_AGE_H = 48; // owner, 2026-11-24 (matches the 48 h news window)
 
 /** What the story depends on: a change in Settings makes the stored story unusable. */
 function storyKey(config) {
