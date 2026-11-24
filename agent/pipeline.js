@@ -1160,9 +1160,10 @@ Rules: ${wsPrompt.userRules}`;
   let result = await callClaudeJSON(systemPrompt, userPrompt, {
     max_tokens: 6144,
     temperature: 0.8,
-    // 2026-11-24: 'low' — steady ~22–25 s instead of 20–62 s at 'medium', same check results in tests
-    // (scripts/timing/writer-timing.js). WRITER_EFFORT env overrides it for timing tests.
-    effort: process.env.WRITER_EFFORT || 'low',
+    // 'medium' on purpose: 'low' was faster (~22–25 s vs 20–62 s) but lost a blind 4-pair test
+    // 47 vs 61 of 80 — it invented sentences and broke the format (2026-11-24,
+    // scripts/timing/writer-compare.js). WRITER_EFFORT env overrides it for tests only.
+    effort: process.env.WRITER_EFFORT || 'medium',
   });
 
   // Correct Claude's self-assigned JLPT tags against the authoritative
